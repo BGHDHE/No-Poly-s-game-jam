@@ -6,6 +6,7 @@ public class GridSystem
     private int height;
     private float cellSize;
     private int[,] matrix;
+
     public GridSystem(int width, int height, float cellSize)
     {
         this.width = width;
@@ -13,15 +14,15 @@ public class GridSystem
         this.cellSize = cellSize;
         matrix = new int[width, height];
 
-        for (int x = 0; x < width; x++) {
-            for (int z = 0; z < height; z++) {
+        for (int x = 0; x < width-1; x++) {
+            for (int z = 0; z < height-1; z++) {
                 Vector3 start = GetWorldPosition(x, z);
                 Debug.DrawLine(start, start + Vector3.right * cellSize, Color.white, 1000f);
                 Debug.DrawLine(start, start + Vector3.forward * cellSize, Color.white, 1000f);
             }
         }
-        Debug.DrawLine(GetWorldPosition(0, height), GetWorldPosition(width, height), Color.white, 1000f);
-        Debug.DrawLine(GetWorldPosition(width, 0), GetWorldPosition(width, height), Color.white, 1000f);
+        Debug.DrawLine(GetWorldPosition(0, height-1), GetWorldPosition(width-1, height-1), Color.white, 1000f);
+        Debug.DrawLine(GetWorldPosition(width-1, 0), GetWorldPosition(width-1, height-1), Color.white, 1000f);
     }
     public Vector3 GetWorldPosition(int x, int z) {
         return new Vector3(x, 0, z) * cellSize;

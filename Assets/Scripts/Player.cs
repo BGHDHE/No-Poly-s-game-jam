@@ -1,35 +1,44 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class Player : MonoBehaviour
 {
     private GridSystem gridSystem;
-    public Transform cubeTransform;
     private GridPosition currentGridPosition;
+    public int playerId; // id: 1,2,3...
+    public bool HasMovedThisTurn { get; set; } = false;
+    public GameObject selectionVisual;
 
-    private void Start() {
-        gridSystem = new GridSystem(10, 10, 2f);
-        currentGridPosition = new GridPosition(0, 0);
-        UpdateCubeVisualPosition();
-    }
-
-    public void Move(InputAction.CallbackContext context) {
-        Vector2 inputVector = context.ReadValue<Vector2>();
-        GridPosition moveOffset = new GridPosition(Mathf.RoundToInt(inputVector.x),Mathf.RoundToInt(inputVector.y));
-        MoveCube(moveOffset);
-    }
-    private void MoveCube(GridPosition offset) {
-        GridPosition targetPosition = new GridPosition(currentGridPosition.x + offset.x,currentGridPosition.z + offset.z);
-
-        if (gridSystem.IsValidGridPosition(targetPosition)) {
-            gridSystem.SetValue(currentGridPosition, 0); 
-            currentGridPosition = targetPosition;
-            gridSystem.SetValue(currentGridPosition, 1);
-            UpdateCubeVisualPosition();
-            Debug.Log($"Mozgás ide: {currentGridPosition}");
+    public void SetSelected(bool isSelected)
+    {
+        if (selectionVisual != null)
+        {
+            selectionVisual.SetActive(isSelected);
         }
     }
-    private void UpdateCubeVisualPosition() {
-        cubeTransform.position = gridSystem.GetWorldPosition(currentGridPosition.x, currentGridPosition.z);
+
+    public void Setup(GridSystem grid, GridPosition startPos, int id) 
+    {
+        this.gridSystem = grid;
+        this.currentGridPosition = startPos;
+        this.playerId = id;
+        UpdateVisual();
+    }
+
+    public bool TryMove(GridPosition offset) 
+    {
+        GridPosition target = new GridPosition(currentGridPosition.x + offset.x, currentGridPosition.z + offset.z);
+        
+        if (gridSystem.IsValidGridPosition(target)) 
+        {
+            currentGridPosition = target;
+            UpdateVisual();
+            return true;
+        }
+        return false;
+    }
+
+    private void UpdateVisual() 
+    {
+        transform.position = gridSystem.GetWorldPosition(currentGridPosition.x, currentGridPosition.z);
     }
 }
