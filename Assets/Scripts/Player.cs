@@ -6,7 +6,15 @@ public class Player : MonoBehaviour
     private GridPosition currentGridPosition;
     public int playerId; // id: 1,2,3...
     public bool HasMovedThisTurn { get; set; } = false;
+    public GameObject selectionVisual;
 
+    public void SetSelected(bool isSelected)
+    {
+        if (selectionVisual != null)
+        {
+            selectionVisual.SetActive(isSelected);
+        }
+    }
 
     public void Setup(GridSystem grid, GridPosition startPos, int id) 
     {

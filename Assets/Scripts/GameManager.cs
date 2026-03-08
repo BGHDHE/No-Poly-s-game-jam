@@ -12,6 +12,7 @@ public class GameManager : MonoBehaviour
     {
         gridSystem = new GridSystem(10, 10, 2f);
         SpawnPlayers();
+        UpdateSelectionVisuals();
     }
 
     private void SpawnPlayers() 
@@ -47,6 +48,7 @@ public class GameManager : MonoBehaviour
         if (activePlayer.TryMove(offset)) 
         {
             activePlayer.HasMovedThisTurn = true;
+            UpdateSelectionVisuals();
             Debug.Log($"{activePlayer.name} lepett.");
         }
     }
@@ -64,16 +66,26 @@ public class GameManager : MonoBehaviour
             p.HasMovedThisTurn = false;
         }
 
+        UpdateSelectionVisuals();
         Debug.Log("Uj kor kezdodott");
     }
 
+    private void UpdateSelectionVisuals()
+    {
+        Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
+
+        foreach (Player p in players)
+        {
+            p.SetSelected(p == activePlayer);
+        }
+    }
     private void OnDrawGizmos() 
     {
         foreach (var p in players) 
         {
             if (p == null) continue;
             Gizmos.color = p.HasMovedThisTurn ? Color.gray : Color.green;
-            Gizmos.DrawWireSphere(p.transform.position + Vector3.up * 1.5f, 0.3f);
+            Gizmos.DrawWireSphere(p.transform.position + Vector3.up * 4f, 0.3f);
         }
     }
 }
