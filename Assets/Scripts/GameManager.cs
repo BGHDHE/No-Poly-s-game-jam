@@ -7,6 +7,8 @@ public class GameManager : MonoBehaviour
     private GridSystem gridSystem;
     [SerializeField] private GameObject playerPrefab;
     private List<Player> players = new List<Player>();
+    [SerializeField] private GameObject aiPrefab;
+    private EnemyAI enemyAI;
 
     private void Start() 
     {
@@ -31,6 +33,10 @@ public class GameManager : MonoBehaviour
             p.Setup(gridSystem, startPositions[i], i + 1);
             players.Add(p);
         }
+
+        GameObject aiGo = Instantiate(aiPrefab);
+        enemyAI = aiGo.GetComponent<EnemyAI>();
+        enemyAI.Setup(gridSystem, new GridPosition(5, 5));
     }
 
     public void HandleMoveInput(Vector2 input) 
@@ -38,36 +44,61 @@ public class GameManager : MonoBehaviour
         Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
 
         if (activePlayer == null) 
-        {
-            Debug.Log("Minden karakter lepett, nyomj gombot");
             return;
-        }
 
         GridPosition offset = new GridPosition(Mathf.RoundToInt(input.x), Mathf.RoundToInt(input.y));
-        
+    
         if (activePlayer.TryMove(offset)) 
         {
             activePlayer.HasMovedThisTurn = true;
             UpdateSelectionVisuals();
             Debug.Log($"{activePlayer.name} lepett.");
+
+            if (players.All(p => p.HasMovedThisTurn))
+            {
+                ExecuteAITurn();
+            }
         }
     }
 
-    public void NextTurn() 
+    private void ExecuteAITurn()
     {
-        if (players.Any(p => !p.HasMovedThisTurn)) 
+        Debug.Log("AI kor indul");
+    
+        if (enemyAI != null)
         {
-            Debug.Log("Meg nem leptel minden karakterrel");
-            return;
+            enemyAI.TakeTurn(players);
         }
 
+        ResetPlayersForNewTurn();
+    }
+
+    private void ResetPlayersForNewTurn()
+    {
         foreach (Player p in players) 
         {
             p.HasMovedThisTurn = false;
         }
-
+    
         UpdateSelectionVisuals();
-        Debug.Log("Uj kor kezdodott");
+        Debug.Log("uj kor kezdodik");
+    }
+
+    public void HandleSkipInput() 
+    {
+        Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
+
+        if (activePlayer == null) 
+            return;
+
+        activePlayer.HasMovedThisTurn = true;
+        UpdateSelectionVisuals();
+        Debug.Log($"{activePlayer.name} skippelt.");
+
+        if (players.All(p => p.HasMovedThisTurn))
+        {
+            ExecuteAITurn();
+        }
     }
 
     private void UpdateSelectionVisuals()
@@ -79,6 +110,7 @@ public class GameManager : MonoBehaviour
             p.SetSelected(p == activePlayer);
         }
     }
+
     private void OnDrawGizmos() 
     {
         foreach (var p in players) 
