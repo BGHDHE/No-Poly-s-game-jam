@@ -41,4 +41,9 @@ public class Player : MonoBehaviour
     {
         transform.position = gridSystem.GetWorldPosition(currentGridPosition.x, currentGridPosition.z);
     }
+
+    public GridPosition GetGridPosition()
+    {
+        return currentGridPosition;
+    }
 }
