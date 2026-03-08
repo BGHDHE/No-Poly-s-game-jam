@@ -1,24 +1,30 @@
-using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class PlayerInputSystem : MonoBehaviour
 {
     private PlayerInputActions playerInputActions;
-    public Player player;
+    public GameManager gameManager;
 
-    private void Awake() {
+    private void Awake() 
+    {
         playerInputActions = new PlayerInputActions();
     }
-    private void OnEnable() {
+
+    private void OnEnable() 
+    {
         playerInputActions.Enable();
         playerInputActions.Player.Move.performed += OnMovePerformed;
     }
-    private void OnMovePerformed(InputAction.CallbackContext context) {
-        player.Move(context);
+
+    private void OnMovePerformed(InputAction.CallbackContext context) 
+    {
+        Vector2 input = context.ReadValue<Vector2>();
+        gameManager.HandleMoveInput(input);
     }
 
-    private void OnDisable() {
+    private void OnDisable() 
+    {
         playerInputActions.Player.Move.performed -= OnMovePerformed;
         playerInputActions.Disable();
     }
