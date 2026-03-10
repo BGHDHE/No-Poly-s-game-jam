@@ -1756,6 +1756,55 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &451755435
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 451755437}
+  - component: {fileID: 451755436}
+  m_Layer: 0
+  m_Name: SpawnMaze
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &451755436
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 451755435}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 25e6ca44ea427c621a280c8129e6db1d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  prefabList:
+  - {fileID: 3709023691562747283, guid: 02beca2ef5327e3f18a258c679fb173d, type: 3}
+  - {fileID: 4710103060042994503, guid: 05185e4eab24eea00b5622977a9a31c9, type: 3}
+  - {fileID: 1920667864456834489, guid: 868e7f67ae4dc45b4a9167950e8d7106, type: 3}
+  spawnPoint: {fileID: 451755437}
+--- !u!4 &451755437
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 451755435}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &474818600
 GameObject:
   m_ObjectHideFlags: 0
@@ -1811,7 +1860,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &477593429
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9222,3 +9271,4 @@ SceneRoots:
   - {fileID: 95752577}
   - {fileID: 477593432}
   - {fileID: 1206805712}
+  - {fileID: 451755437}

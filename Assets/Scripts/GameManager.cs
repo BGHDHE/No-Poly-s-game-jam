@@ -12,7 +12,7 @@ public class GameManager : MonoBehaviour
 
     private void Start() 
     {
-        gridSystem = new GridSystem(10, 10, 2f);
+        gridSystem = new GridSystem(10, 10, 6f);
         SpawnPlayers();
         UpdateSelectionVisuals();
     }
