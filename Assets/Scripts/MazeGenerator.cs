@@ -3,11 +3,11 @@ using UnityEngine;
 
 public class MazeGenerator : MonoBehaviour
 {
-    public int mazeWidth;
+public int mazeWidth;
     public int mazeHeight;
     private float cellSize = 6f;
 
-    public GameObject CellPrefab;
+    public List<GameObject> CellPrefabs; 
 
     private MazeCell[,] cells;
 
@@ -15,6 +15,10 @@ public class MazeGenerator : MonoBehaviour
     
     private void Start()
     {
+        if (CellPrefabs == null || CellPrefabs.Count == 0)
+        {
+            return;
+        }
         GenerateMaze();
     }
 
@@ -25,23 +29,26 @@ public class MazeGenerator : MonoBehaviour
         GenerateDFS();
     }
 
-void CreateGrid()
-{
-    cells = new MazeCell[mazeWidth, mazeHeight];
-    Vector3 offset = new Vector3(0f, 0f, -2f); 
-
-    for (int x = 0; x < mazeWidth; x++)
+    void CreateGrid()
     {
-        for (int y = 0; y < mazeHeight; y++)
+        cells = new MazeCell[mazeWidth, mazeHeight];
+        Vector3 offset = new Vector3(0f, 0f, -2f); 
+
+        for (int x = 0; x < mazeWidth; x++)
         {
-            Vector3 pos = new Vector3(x * cellSize, 0, y * cellSize) + offset;
-            
-            GameObject cellObj = Instantiate(CellPrefab, pos, Quaternion.identity, transform);
-            cellObj.name = $"Cell_{x}_{y}";
-            cells[x, y] = cellObj.GetComponent<MazeCell>();
+            for (int y = 0; y < mazeHeight; y++)
+            {
+                Vector3 pos = new Vector3(x * cellSize, 0, y * cellSize) + offset;
+                
+                int randomIndex = Random.Range(0, CellPrefabs.Count);
+                GameObject randomPrefab = CellPrefabs[randomIndex];
+
+                GameObject cellObj = Instantiate(randomPrefab, pos, Quaternion.identity, transform);
+                cellObj.name = $"Cell_{x}_{y}";
+                cells[x, y] = cellObj.GetComponent<MazeCell>();
+            }
         }
     }
-}
 
     void GenerateDFS()
     {
