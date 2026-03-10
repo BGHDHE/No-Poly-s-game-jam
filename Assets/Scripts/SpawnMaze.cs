@@ -7,9 +7,10 @@ public class PrefabLoader : MonoBehaviour
     
     public Transform spawnPoint;
 
-    public void Start()
+    void Start()
     {
-        //SpawnRandomPrefab();
+        //SpawnPrefabByIndex(1);
+        SpawnRandomPrefab();
     }
 
     public void SpawnRandomPrefab()

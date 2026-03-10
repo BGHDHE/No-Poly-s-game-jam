@@ -24329,7 +24329,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8360214811022019381}
-  - component: {fileID: 3334134298102252014}
   m_Layer: 0
   m_Name: Maze3
   m_TagString: Untagged
@@ -24452,21 +24451,6 @@ Transform:
   - {fileID: 2015160034272667122}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &3334134298102252014
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1920667864456834489}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f01d459dbae92624f878e8543324e398, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MazeGenerator
-  mazeWidth: 10
-  mazeHeight: 10
-  CellPrefab: {fileID: 8439718081963735333, guid: e3460eae5961bd33a9b0337ccd0dd1a1, type: 3}
 --- !u!1 &1926375122443288775
 GameObject:
   m_ObjectHideFlags: 0
