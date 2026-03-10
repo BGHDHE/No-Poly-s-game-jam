@@ -5,14 +5,10 @@ using UnityEngine;
 public class GameStartCountDownUI : MonoBehaviour
 {
     private const string NUMBER_POPUP = "NumberPopup";
-
-
     [SerializeField] private TextMeshProUGUI countdownText;
-
 
     private Animator animator;
     private int previousCountdownNumber;
-
 
     private void Awake() {
         animator = GetComponent<Animator>();
@@ -20,7 +16,6 @@ public class GameStartCountDownUI : MonoBehaviour
 
     private void Start() {
         GameDirector.Instance.OnStateChanged += GameDirector_OnStateChanged;
-
         Hide();
     }
 

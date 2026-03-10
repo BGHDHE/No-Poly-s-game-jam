@@ -18,17 +18,14 @@ public class TutorialUI : MonoBehaviour
 
         Show();
     }
-
     private void GameDirector_OnStateChanged(object sender, System.EventArgs e) {
         if (GameDirector.Instance.IsCountdownToStartActive()) {
             Hide();
         }
     }
-
     private void GameInput_OnBindingRebind(object sender, System.EventArgs e) {
         UpdateVisual();
     }
-
     private void UpdateVisual() {
         keyMoveUpText.text = PlayerInputSystem.Instance.GetBindingText(PlayerInputSystem.Binding.Move_Up);
         keyMoveDownText.text = PlayerInputSystem.Instance.GetBindingText(PlayerInputSystem.Binding.Move_Down);
@@ -37,11 +34,9 @@ public class TutorialUI : MonoBehaviour
         keyPauseText.text = PlayerInputSystem.Instance.GetBindingText(PlayerInputSystem.Binding.Pause);
         keySkipText.text = PlayerInputSystem.Instance.GetBindingText(PlayerInputSystem.Binding.Skip);
     }
-
     private void Show() {
         gameObject.SetActive(true);
     }
-
     private void Hide() {
         gameObject.SetActive(false);
     }

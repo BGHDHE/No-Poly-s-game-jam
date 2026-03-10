@@ -26,19 +26,17 @@ public class GameDirector : MonoBehaviour
         Instance = this;
         state = State.WaitingToStart;
     }
-
     private void Start() {
         PlayerInputSystem.Instance.OnPauseAction += GameInput_OnPauseAction;
-        PlayerInputSystem.Instance.OnStartAction += GameInput_OnStartAction;
+        PlayerInputSystem.Instance.OnSkipAction += GameInput_OnSkipAction;
     }
 
-    private void GameInput_OnStartAction(object sender, EventArgs e) {
+    private void GameInput_OnSkipAction(object sender, EventArgs e) {
         if (state == State.WaitingToStart) {
             state = State.CountdownToStart;
             OnStateChanged?.Invoke(this, EventArgs.Empty);
         }
     }
-
     private void GameInput_OnPauseAction(object sender, EventArgs e) {
         TogglePauseGame();
     }
@@ -78,15 +76,12 @@ public class GameDirector : MonoBehaviour
     public float GetCountdownToStartTimer() {
         return countdownToStartTimer;
     }
-
     public bool IsGameOver() {
         return state == State.GameOver;
     }
-
     public float GetGamePlayingTimerNormalized() {
         return 1 - (gamePlayingTimer / gamePlayingTimerMax);
     }
-
     public void TogglePauseGame() {
         isGamePaused = !isGamePaused;
         if (isGamePaused) {
