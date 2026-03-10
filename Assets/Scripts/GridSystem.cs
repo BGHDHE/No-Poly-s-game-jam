@@ -25,7 +25,7 @@ public class GridSystem
         Debug.DrawLine(GetWorldPosition(width-1, 0), GetWorldPosition(width-1, height-1), Color.white, 1000f);
     }
     public Vector3 GetWorldPosition(int x, int z) {
-        return new Vector3(x, 0, z) * cellSize;
+        return new Vector3(x, 0.15f, z) * cellSize;
     }
     public bool IsValidGridPosition(GridPosition gridPosition) {
         return gridPosition.x >= 0 && gridPosition.z >= 0 && gridPosition.x < width && gridPosition.z < height;

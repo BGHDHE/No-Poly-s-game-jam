@@ -1,0 +1,31 @@
+# if UNITY_EDITOR
+
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+
+public class SceneMenu : MonoBehaviour
+{
+    [MenuItem("Level/MainMenu")]
+    public static void LoadLobby()
+    {
+        LoadScene("Assets/Scenes/MainMenuScene.unity");
+    }
+    [MenuItem("Level/Game")]
+    public static void LoadMain()
+    {
+        LoadScene("Assets/Scenes/GameScene.unity");
+    }
+    [MenuItem("Level/Loading")]
+    public static void LoadLoading()
+    {
+        LoadScene("Assets/Scenes/LoadingScene.unity");
+    }
+
+    private static void LoadScene(string scenePath)
+    {
+        EditorSceneManager.SaveOpenScenes();
+        EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+    }
+}
+#endif
