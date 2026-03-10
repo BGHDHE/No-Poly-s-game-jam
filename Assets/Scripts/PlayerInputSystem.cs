@@ -11,7 +11,7 @@ public class PlayerInputSystem : MonoBehaviour
 
     public event EventHandler OnPauseAction;
     public event EventHandler OnBindingRebind;
-    public event EventHandler OnSkipAction;
+    public event EventHandler OnStartAction;
 
     public enum Binding {
         Move_Up,
@@ -54,7 +54,7 @@ public class PlayerInputSystem : MonoBehaviour
     }
 
     private void SkipPerformed(UnityEngine.InputSystem.InputAction.CallbackContext obj) {
-        OnSkipAction?.Invoke(this, EventArgs.Empty);
+        OnStartAction?.Invoke(this, EventArgs.Empty);
         //gameManager.HandleSkipInput();
     }
     private void PausePerformed(UnityEngine.InputSystem.InputAction.CallbackContext obj) {

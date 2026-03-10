@@ -29,16 +29,14 @@ public class GameDirector : MonoBehaviour
 
     private void Start() {
         PlayerInputSystem.Instance.OnPauseAction += GameInput_OnPauseAction;
-        PlayerInputSystem.Instance.OnSkipAction += GameInput_OnSkipAction;
+        PlayerInputSystem.Instance.OnStartAction += GameInput_OnStartAction;
     }
 
-    private void GameInput_OnSkipAction(object sender, EventArgs e) {
-        /*if (state == State.WaitingToStart) {
+    private void GameInput_OnStartAction(object sender, EventArgs e) {
+        if (state == State.WaitingToStart) {
             state = State.CountdownToStart;
             OnStateChanged?.Invoke(this, EventArgs.Empty);
         }
-         * 
-         */
     }
 
     private void GameInput_OnPauseAction(object sender, EventArgs e) {
