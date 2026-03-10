@@ -7,40 +7,14 @@ public class MazeCell : MonoBehaviour
     public GameObject wallSouth;
     public GameObject wallWest;
 
-    private bool northRemoved;
-    private bool eastRemoved;
-    private bool southRemoved;
-    private bool westRemoved;
+    public bool IsNorthOpen => wallNorth != null && !wallNorth.activeSelf;
+    public bool IsEastOpen  => wallEast != null && !wallEast.activeSelf;
+    public bool IsSouthOpen => wallSouth != null && !wallSouth.activeSelf;
+    public bool IsWestOpen  => wallWest != null && !wallWest.activeSelf;
 
-    public void RemoveNorth()
-    {
-        northRemoved = true;
-        wallNorth.SetActive(false);
-    }
+    public void RemoveNorth() { wallNorth.SetActive(false); }
+    public void RemoveEast()  { wallEast.SetActive(false); }
+    public void RemoveSouth() { wallSouth.SetActive(false); }
+    public void RemoveWest()  { wallWest.SetActive(false); }
 
-    public void RemoveEast()
-    {
-        eastRemoved = true;
-        wallEast.SetActive(false);
-    }
-
-    public void RemoveSouth()
-    {
-        southRemoved = true;
-        wallSouth.SetActive(false);
-    }
-
-    public void RemoveWest()
-    {
-        westRemoved = true;
-        wallWest.SetActive(false);
-    }
-
-    public void UpdateWalls()
-    {
-        if (wallNorth) wallNorth.SetActive(!northRemoved);
-        if (wallEast)  wallEast.SetActive(!eastRemoved);
-        if (wallSouth) wallSouth.SetActive(!southRemoved);
-        if (wallWest)  wallWest.SetActive(!westRemoved);
-    }
 }

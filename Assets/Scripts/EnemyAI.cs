@@ -14,38 +14,53 @@ public class EnemyAI : MonoBehaviour
         UpdateVisual();
     }
 
-    public void TakeTurn(List<Player> pursuers) 
+    public void TakeTurn(List<Player> pursuers, MazeCell[,] mazeCells) 
     {
         for (int i = 0; i < 2; i++) 
         {
-            currentGridPosition = GetBestMove(pursuers);
+            currentGridPosition = GetBestMove(pursuers, mazeCells);
         }
-    
         UpdateVisual();
         HasMovedThisTurn = true;
     }
 
-    private GridPosition GetBestMove(List<Player> pursuers) 
+    private GridPosition GetBestMove(List<Player> pursuers, MazeCell[,] mazeCells) 
     {
         GridPosition bestPos = currentGridPosition;
         float maxMinDistance = -1f;
 
         GridPosition[] directions = 
         {
-            new GridPosition(0, 1), new GridPosition(0, -1),
-            new GridPosition(1, 0), new GridPosition(-1, 0),
+            new GridPosition(0, 1), 
+            new GridPosition(0, -1), 
+            new GridPosition(1, 0), 
+            new GridPosition(-1, 0), 
             new GridPosition(0, 0)
         };
 
+        MazeCell currentCell = mazeCells[currentGridPosition.x, currentGridPosition.z];
+
         foreach (var dir in directions) 
-        {
+        {   
             GridPosition target = new GridPosition(currentGridPosition.x + dir.x, currentGridPosition.z + dir.z);
 
             if (gridSystem.IsValidGridPosition(target)) 
             {
+            
+                bool canMove = false;
+
+                if (dir.x == 0 && dir.z == 0) canMove = true;
+                else if (dir.z == 1 && currentCell.IsNorthOpen) canMove = true;
+                else if (dir.z == -1 && currentCell.IsSouthOpen) canMove = true;
+                else if (dir.x == 1 && currentCell.IsEastOpen) canMove = true;
+                else if (dir.x == -1 && currentCell.IsWestOpen) canMove = true;
+
+                if (!canMove) continue;
+            
+
                 float minDistToPursuer = float.MaxValue;
                 foreach (var p in pursuers) 
-                {
+                {   
                     float dist = Vector3.Distance
                     (
                         new Vector3(target.x, 0, target.z), 

@@ -10,6 +10,8 @@ public class MazeGenerator : MonoBehaviour
     public GameObject CellPrefab;
 
     private MazeCell[,] cells;
+
+    public MazeCell[,] GetCells() => cells;
     
     private void Start()
     {

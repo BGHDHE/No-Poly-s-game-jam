@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
@@ -9,13 +10,40 @@ public class GameManager : MonoBehaviour
     private List<Player> players = new List<Player>();
     [SerializeField] private GameObject aiPrefab;
     private EnemyAI enemyAI;
+private MazeCell[,] mazeCells;
+private int width = 10;
+private int height = 10;
+private float cellSize = 6f;
 
-    private void Start() 
+private void InitializeMazeReference()
+{
+    mazeCells = new MazeCell[width, height];
+    
+    MazeCell[] allCells = FindObjectsOfType<MazeCell>();
+
+    foreach (MazeCell cell in allCells)
     {
-        gridSystem = new GridSystem(10, 10, 6f);
-        SpawnPlayers();
-        UpdateSelectionVisuals();
+        int x = Mathf.RoundToInt(cell.transform.position.x / cellSize);
+        int z = Mathf.RoundToInt(cell.transform.position.z / cellSize);
+
+        if (x >= 0 && x < width && z >= 0 && z < height)
+        {
+            mazeCells[x, z] = cell;
+        }
     }
+}
+
+
+private IEnumerator Start() 
+{
+    yield return new WaitForEndOfFrame();
+
+    gridSystem = new GridSystem(width, height, cellSize);
+    InitializeMazeReference();
+    
+    SpawnPlayers();
+    UpdateSelectionVisuals();
+}
 
     private void SpawnPlayers() 
     {
@@ -39,39 +67,46 @@ public class GameManager : MonoBehaviour
         enemyAI.Setup(gridSystem, new GridPosition(5, 5));
     }
 
-    public void HandleMoveInput(Vector2 input) 
+public void HandleMoveInput(Vector2 input) 
+{
+    Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
+    if (activePlayer == null) return;
+
+    int dx = Mathf.RoundToInt(input.x);
+    int dy = Mathf.RoundToInt(input.y);
+
+    GridPosition currentPos = activePlayer.GetGridPosition(); 
+    MazeCell currentCell = mazeCells[currentPos.x, currentPos.z];
+
+    bool canMove = false;
+
+    if (dy == 1 && currentCell.IsNorthOpen) canMove = true; 
+    else if (dy == -1 && currentCell.IsSouthOpen) canMove = true;
+    else if (dx == 1 && currentCell.IsEastOpen) canMove = true;
+    else if (dx == -1 && currentCell.IsWestOpen) canMove = true;
+
+    if (canMove) 
     {
-        Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
-
-        if (activePlayer == null) 
-            return;
-
-        GridPosition offset = new GridPosition(Mathf.RoundToInt(input.x), Mathf.RoundToInt(input.y));
-    
-        if (activePlayer.TryMove(offset)) 
+        if (activePlayer.TryMove(new GridPosition(dx, dy))) 
         {
             activePlayer.HasMovedThisTurn = true;
             UpdateSelectionVisuals();
-            Debug.Log($"{activePlayer.name} lepett.");
-
-            if (players.All(p => p.HasMovedThisTurn))
-            {
-                ExecuteAITurn();
-            }
+            if (players.All(p => p.HasMovedThisTurn)) ExecuteAITurn();
         }
     }
-
-    private void ExecuteAITurn()
-    {
-        Debug.Log("AI kor indul");
-    
-        if (enemyAI != null)
+        else
         {
-            enemyAI.TakeTurn(players);
+            Debug.Log("nem jooo");
         }
-
-        ResetPlayersForNewTurn();
+}
+private void ExecuteAITurn()
+{
+    if (enemyAI != null)
+    {
+        enemyAI.TakeTurn(players, mazeCells);
     }
+    ResetPlayersForNewTurn();
+}
 
     private void ResetPlayersForNewTurn()
     {
