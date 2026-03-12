@@ -79,7 +79,7 @@ private void Start()
     void CreateGrid()
     {
         cells = new MazeCell[mazeWidth, mazeHeight];
-        Vector3 offset = new Vector3(6f, 0f, 1f);
+        Vector3 offset = new Vector3(8.8f, 0f, 1f);
 
         for (int x = 0; x < mazeWidth; x++)
         {
