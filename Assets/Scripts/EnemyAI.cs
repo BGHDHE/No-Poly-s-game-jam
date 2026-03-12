@@ -7,7 +7,7 @@ public class EnemyAI : MonoBehaviour
     public Vector2Int GridPos { get; private set; }
 
     private Vector2Int lastGridPos = new Vector2Int(-1, -1);
-    private float cellSize = 6f;
+    private float cellSize = 18f;
     private float moveSpeed = 9f;
 
     public void Setup(Vector2Int startPos)
@@ -39,7 +39,8 @@ public class EnemyAI : MonoBehaviour
             new Vector2Int(0, 1),
             new Vector2Int(0, -1),
             new Vector2Int(1, 0),
-            new Vector2Int(-1, 0)
+            new Vector2Int(-1, 0),
+            new Vector2Int(0, 0)
         };
 
         Vector2Int bestMove = GridPos;

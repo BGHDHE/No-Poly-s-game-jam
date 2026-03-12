@@ -5,7 +5,7 @@ public class MazeGenerator : MonoBehaviour
 {
     public int mazeWidth;
     public int mazeHeight;
-    private float cellSize = 6f;
+    private float cellSize = 18f;
 
     public List<GameObject> CellPrefabs;
     public GameObject playerPrefab;
@@ -15,16 +15,14 @@ public class MazeGenerator : MonoBehaviour
 
     public MazeCell[,] GetCells() => cells;
 
-    private void Start()
-    {
-        if (CellPrefabs == null || CellPrefabs.Count == 0)
-        {
-            return;
-        }
+private void Start()
+{
+    if (CellPrefabs == null || CellPrefabs.Count == 0) return;
 
-        GenerateMaze();
-        SpawnPlayersInCorners();
-    }
+    GenerateMaze();
+    SpawnPlayersInCorners();
+    CenterCamera();
+}
 
     void GenerateMaze()
     {
@@ -62,10 +60,26 @@ public class MazeGenerator : MonoBehaviour
         SpawnPlayersInCorners();
     }
 
+    void CenterCamera()
+{
+    Camera mainCam = Camera.main;
+    if (mainCam == null) return;
+
+    float centerX = (mazeWidth * cellSize) / 2f - (cellSize / 2f) + 6f;
+    float centerZ = 0f;
+
+
+    float height = Mathf.Max(mazeWidth, mazeHeight) * (cellSize / 1.6f);
+
+    mainCam.transform.position = new Vector3(centerX, height, centerZ);
+    
+    mainCam.transform.rotation = Quaternion.Euler(63f, 0f, 0f);
+}
+
     void CreateGrid()
     {
         cells = new MazeCell[mazeWidth, mazeHeight];
-        Vector3 offset = new Vector3(3f, 0f, 0.5f);
+        Vector3 offset = new Vector3(6f, 0f, 1f);
 
         for (int x = 0; x < mazeWidth; x++)
         {
@@ -132,9 +146,9 @@ public class MazeGenerator : MonoBehaviour
         float posX = (gridPos.x * cellSize) + (cellSize / 2f);
         float posZ = (gridPos.y * cellSize) + (cellSize / 2f);
 
-        Vector3 offset = new Vector3(0f, 0f, 0f);
+        Vector3 offset = new Vector3(0f, -0.125f, 0f);
 
-        return new Vector3(posX, 1.0f, posZ) + offset;
+        return new Vector3(posX, 0f, posZ) + offset;
     }
 
     void GenerateDFS()

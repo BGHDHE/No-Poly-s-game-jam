@@ -7,10 +7,10 @@ public class GameManager : MonoBehaviour
     public static GameManager Instance { get; private set; }
 
     [SerializeField] private MazeGenerator mazeGenerator;
-    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float moveSpeed;
 
     [SerializeField] private GameObject indicatorPrefab;
-    [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 2f, 0f);
+    [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 0f, 0f);
 
     private List<PlayerMarker> players = new List<PlayerMarker>();
     private int currentPlayerIndex = 0;
@@ -110,40 +110,58 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
+private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
+{
+    isMoving = true;
+
+    player.GridPos = targetGridPos;
+
+    float cellSize = 18f;
+    Vector3 offset = new Vector3(0f, 0f, 0f);
+    Vector3 targetWorldPos = new Vector3(
+        targetGridPos.x * cellSize + (cellSize / 2f),
+        player.transform.position.y,
+        targetGridPos.y * cellSize + (cellSize / 2f)
+    );
+
+    SetPlayerBool(player, "isAlerted", false);
+    SetPlayerBool(player, "isRunning", true);
+
+    while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
     {
-        isMoving = true;
-
-        player.SetGridPosition(targetGridPos.x, targetGridPos.y);
-
-        float cellSize = 6f;
-        Vector3 offset = new Vector3(0f, 1f, 0f);
-
-        Vector3 targetWorldPos =
-            new Vector3(
-                targetGridPos.x * cellSize + (cellSize / 2f),
-                offset.y,
-                targetGridPos.y * cellSize + (cellSize / 2f)
-            ) + new Vector3(0, 0, offset.z);
-
-        while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.01f)
+        Vector3 direction = (targetWorldPos - player.transform.position).normalized;
+        if (direction != Vector3.zero)
         {
-            player.transform.position = Vector3.MoveTowards(
-                player.transform.position,
-                targetWorldPos,
-                moveSpeed * Time.deltaTime
-            );
-
-            yield return null;
+            Quaternion lookRotation = Quaternion.LookRotation(direction);
+            player.transform.rotation = Quaternion.Slerp(player.transform.rotation, lookRotation, Time.deltaTime * 30f);
         }
 
-        player.transform.position = targetWorldPos;
+        player.transform.position = Vector3.MoveTowards(
+            player.transform.position,
+            targetWorldPos,
+            moveSpeed * Time.deltaTime
+        );
+        yield return null;
+    }
 
-        isMoving = false;
+    player.transform.position = targetWorldPos;
 
-        if (CheckGameOver()) yield break;
+    SetPlayerBool(player, "isRunning", false);
+    
+    isMoving = false;
 
-        NextTurn();
+    if (CheckGameOver()) yield break;
+
+    NextTurn();
+}
+
+    private void SetPlayerBool(PlayerMarker player, string paramName, bool state)
+    {
+        Animator anim = player.GetComponentInChildren<Animator>();
+        if (anim != null)
+        {
+            anim.SetBool(paramName, state);
+        }
     }
 
     private void InitializePlayers()
@@ -191,28 +209,32 @@ public class GameManager : MonoBehaviour
         UpdateTurnIndicator();
     }
 
-    private void UpdateTurnIndicator()
+private void UpdateTurnIndicator()
+{
+    ResetAllPlayersAnimation();
+
+    if (players.Count > 0 && currentPlayerIndex < players.Count)
     {
-        if (indicatorPrefab == null) return;
+        PlayerMarker currentPlayer = players[currentPlayerIndex];
 
-        if (currentIndicator != null)
+        SetPlayerBool(currentPlayer, "isAlerted", true);
+
+        if (currentIndicator != null) Destroy(currentIndicator);
+        if (indicatorPrefab != null)
         {
-            Destroy(currentIndicator);
-        }
-
-        if (players.Count > 0 && currentPlayerIndex < players.Count)
-        {
-            PlayerMarker currentPlayer = players[currentPlayerIndex];
-
             Vector3 spawnPos = currentPlayer.transform.position + indicatorOffset;
-
-            currentIndicator = Instantiate(
-                indicatorPrefab,
-                spawnPos,
-                Quaternion.identity
-            );
-
+            currentIndicator = Instantiate(indicatorPrefab, spawnPos, Quaternion.identity);
             currentIndicator.transform.SetParent(currentPlayer.transform);
         }
     }
+}
+
+private void ResetAllPlayersAnimation()
+{
+    foreach (var player in players)
+    {
+        SetPlayerBool(player, "isAlerted", false);
+        SetPlayerBool(player, "isRunning", false);
+    }
+}
 }
