@@ -1,178 +1,240 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    private GridSystem gridSystem;
+    public static GameManager Instance { get; private set; }
 
-    [SerializeField] private GameObject playerPrefab;
-    [SerializeField] private GameObject aiPrefab;
+    [SerializeField] private MazeGenerator mazeGenerator;
+    [SerializeField] private float moveSpeed;
 
-    private List<Player> players = new List<Player>();
-    private EnemyAI enemyAI;
+    [SerializeField] private GameObject indicatorPrefab;
+    [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 0f, 0f);
 
-    private MazeCell[,] mazeCells;
+    private List<PlayerMarker> players = new List<PlayerMarker>();
+    private int currentPlayerIndex = 0;
+    private bool isMoving = false;
+    private EnemyAI enemy;
+    private GameObject currentIndicator;
 
-    private int width = 10;
-    private int height = 10;
-    private float cellSize = 6f;
-
-    private IEnumerator Start()
+    private void Awake()
     {
-        yield return new WaitForEndOfFrame();
-
-        gridSystem = new GridSystem(width, height, cellSize);
-        InitializeMazeReference();
-
-        SpawnPlayers();
-        UpdateSelectionVisuals();
+        Instance = this;
     }
 
-    private void InitializeMazeReference()
+    private void Start()
     {
-        mazeCells = new MazeCell[width, height];
+        Invoke(nameof(InitializePlayers), 0.2f);
+    }
 
-        MazeCell[] allCells = FindObjectsOfType<MazeCell>();
+    private bool CheckGameOver()
+    {
+        if (enemy == null) return false;
 
-        foreach (MazeCell cell in allCells)
+        foreach (var player in players)
         {
-            int x = Mathf.RoundToInt(cell.transform.position.x / cellSize);
-            int z = Mathf.RoundToInt(cell.transform.position.z / cellSize);
-
-            if (x >= 0 && x < width && z >= 0 && z < height)
+            if (player.GridPos == enemy.GridPos)
             {
-                mazeCells[x, z] = cell;
+                StartCoroutine(ResetSequence());
+                return true;
             }
         }
+
+        return false;
     }
 
-    private void SpawnPlayers()
+    private IEnumerator ResetSequence()
     {
-        GridPosition[] startPositions =
-        {
-            new GridPosition(0, 0),
-            new GridPosition(0, 9),
-            new GridPosition(9, 9)
-        };
+        isMoving = true;
 
-        for (int i = 0; i < 3; i++)
-        {
-            GameObject go = Instantiate(playerPrefab);
+        yield return new WaitForSeconds(1f);
 
-            Player p = go.GetComponent<Player>();
-            p.Setup(gridSystem, startPositions[i], i + 1);
+        mazeGenerator.GenerateNewLevel();
 
-            players.Add(p);
-        }
+        yield return new WaitForEndOfFrame();
 
-        GameObject aiGo = Instantiate(aiPrefab);
-        enemyAI = aiGo.GetComponent<EnemyAI>();
-        enemyAI.Setup(gridSystem, new GridPosition(5, 5));
+        players.Clear();
+        InitializePlayers();
+
+        currentPlayerIndex = 0;
+        isMoving = false;
     }
 
     public void HandleMoveInput(Vector2 input)
     {
-        Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
+        if (isMoving || players.Count == 0) return;
 
-        if (activePlayer == null)
-            return;
+        Vector2Int moveDir = Vector2Int.zero;
 
-        int dx = Mathf.RoundToInt(input.x);
-        int dy = Mathf.RoundToInt(input.y);
+        if (input.y > 0.5f) moveDir = new Vector2Int(0, 1);
+        else if (input.y < -0.5f) moveDir = new Vector2Int(0, -1);
+        else if (input.x > 0.5f) moveDir = new Vector2Int(1, 0);
+        else if (input.x < -0.5f) moveDir = new Vector2Int(-1, 0);
 
-        GridPosition currentPos = activePlayer.GetGridPosition();
-        MazeCell currentCell = mazeCells[currentPos.x, currentPos.z];
-
-        bool canMove = false;
-
-        if (dy == 1 && currentCell.IsNorthOpen) canMove = true;
-        else if (dy == -1 && currentCell.IsSouthOpen) canMove = true;
-        else if (dx == 1 && currentCell.IsEastOpen) canMove = true;
-        else if (dx == -1 && currentCell.IsWestOpen) canMove = true;
-
-        if (canMove)
+        if (moveDir != Vector2Int.zero)
         {
-            if (activePlayer.TryMove(new GridPosition(dx, dy)))
-            {
-                activePlayer.HasMovedThisTurn = true;
-
-                UpdateSelectionVisuals();
-
-                if (players.All(p => p.HasMovedThisTurn))
-                {
-                    ExecuteAITurn();
-                }
-            }
-        }
-        else
-        {
-            Debug.Log("nem jooo");
+            TryMoveCurrentPlayer(moveDir);
         }
     }
 
     public void HandleSkipInput()
     {
-        Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
+        if (isMoving) return;
+        NextTurn();
+    }
 
-        if (activePlayer == null)
+    private void TryMoveCurrentPlayer(Vector2Int direction)
+    {
+        PlayerMarker player = players[currentPlayerIndex];
+        Vector2Int currentGridPos = player.GridPos;
+        Vector2Int targetGridPos = currentGridPos + direction;
+
+        if (targetGridPos.x < 0 || targetGridPos.x >= mazeGenerator.mazeWidth ||
+            targetGridPos.y < 0 || targetGridPos.y >= mazeGenerator.mazeHeight)
+        {
             return;
+        }
 
-        activePlayer.HasMovedThisTurn = true;
+        MazeCell currentCell = mazeGenerator.GetCells()[currentGridPos.x, currentGridPos.y];
+        bool canMove = false;
 
-        UpdateSelectionVisuals();
-        Debug.Log($"{activePlayer.name} skippelt.");
+        if (direction == Vector2Int.up && currentCell.IsNorthOpen) canMove = true;
+        if (direction == Vector2Int.down && currentCell.IsSouthOpen) canMove = true;
+        if (direction == Vector2Int.right && currentCell.IsEastOpen) canMove = true;
+        if (direction == Vector2Int.left && currentCell.IsWestOpen) canMove = true;
 
-        if (players.All(p => p.HasMovedThisTurn))
+        if (canMove)
         {
-            ExecuteAITurn();
+            StartCoroutine(MoveRoutine(player, targetGridPos));
         }
     }
 
-    private void ExecuteAITurn()
+private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
+{
+    isMoving = true;
+
+    player.GridPos = targetGridPos;
+
+    float cellSize = 18f;
+    Vector3 offset = new Vector3(0f, 0f, 0f);
+    Vector3 targetWorldPos = new Vector3(
+        targetGridPos.x * cellSize + (cellSize / 2f),
+        player.transform.position.y,
+        targetGridPos.y * cellSize + (cellSize / 2f)
+    );
+
+    SetPlayerBool(player, "isAlerted", false);
+    SetPlayerBool(player, "isRunning", true);
+
+    while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
     {
-        if (enemyAI != null)
+        Vector3 direction = (targetWorldPos - player.transform.position).normalized;
+        if (direction != Vector3.zero)
         {
-            enemyAI.TakeTurn(players, mazeCells);
+            Quaternion lookRotation = Quaternion.LookRotation(direction);
+            player.transform.rotation = Quaternion.Slerp(player.transform.rotation, lookRotation, Time.deltaTime * 30f);
         }
 
-        ResetPlayersForNewTurn();
+        player.transform.position = Vector3.MoveTowards(
+            player.transform.position,
+            targetWorldPos,
+            moveSpeed * Time.deltaTime
+        );
+        yield return null;
     }
 
-    private void ResetPlayersForNewTurn()
+    player.transform.position = targetWorldPos;
+
+    SetPlayerBool(player, "isRunning", false);
+    
+    isMoving = false;
+
+    if (CheckGameOver()) yield break;
+
+    NextTurn();
+}
+
+    private void SetPlayerBool(PlayerMarker player, string paramName, bool state)
     {
-        foreach (Player p in players)
+        Animator anim = player.GetComponentInChildren<Animator>();
+        if (anim != null)
         {
-            p.HasMovedThisTurn = false;
+            anim.SetBool(paramName, state);
         }
-
-        UpdateSelectionVisuals();
-        Debug.Log("uj kor kezdodik");
     }
 
-    private void UpdateSelectionVisuals()
+    private void InitializePlayers()
     {
-        Player activePlayer = players.Find(p => !p.HasMovedThisTurn);
+        players.Clear();
 
-        foreach (Player p in players)
+        PlayerMarker[] foundPlayers = FindObjectsOfType<PlayerMarker>();
+        players.AddRange(foundPlayers);
+
+        enemy = FindObjectOfType<EnemyAI>();
+
+        if (players.Count > 0)
         {
-            p.SetSelected(p == activePlayer);
+            UpdateTurnIndicator();
         }
     }
 
-    private void OnDrawGizmos()
+    private void NextTurn()
     {
-        foreach (var p in players)
+        currentPlayerIndex++;
+
+        if (currentPlayerIndex >= players.Count)
         {
-            if (p == null) continue;
-
-            Gizmos.color = p.HasMovedThisTurn ? Color.gray : Color.green;
-
-            Gizmos.DrawWireSphere(
-                p.transform.position + Vector3.up * 4f,
-                0.3f
-            );
+            StartCoroutine(EnemyTurnRoutine());
+        }
+        else
+        {
+            UpdateTurnIndicator();
         }
     }
+
+    private IEnumerator EnemyTurnRoutine()
+    {
+        isMoving = true;
+
+        yield return StartCoroutine(
+            enemy.TakeTurnCoroutine(players, mazeGenerator.GetCells())
+        );
+
+        currentPlayerIndex = 0;
+        isMoving = false;
+
+        if (CheckGameOver()) yield break;
+
+        UpdateTurnIndicator();
+    }
+
+private void UpdateTurnIndicator()
+{
+    ResetAllPlayersAnimation();
+
+    if (players.Count > 0 && currentPlayerIndex < players.Count)
+    {
+        PlayerMarker currentPlayer = players[currentPlayerIndex];
+
+        SetPlayerBool(currentPlayer, "isAlerted", true);
+
+        if (currentIndicator != null) Destroy(currentIndicator);
+        if (indicatorPrefab != null)
+        {
+            Vector3 spawnPos = currentPlayer.transform.position + indicatorOffset;
+            currentIndicator = Instantiate(indicatorPrefab, spawnPos, Quaternion.identity);
+            currentIndicator.transform.SetParent(currentPlayer.transform);
+        }
+    }
+}
+
+private void ResetAllPlayersAnimation()
+{
+    foreach (var player in players)
+    {
+        SetPlayerBool(player, "isAlerted", false);
+        SetPlayerBool(player, "isRunning", false);
+    }
+}
 }

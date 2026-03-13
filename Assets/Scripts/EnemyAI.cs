@@ -1,102 +1,158 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Collections;
 
 public class EnemyAI : MonoBehaviour
 {
-    private GridSystem gridSystem;
-    private GridPosition currentGridPosition;
+    public Vector2Int GridPos { get; private set; }
 
-    public bool HasMovedThisTurn { get; set; } = false;
+    private Vector2Int lastGridPos = new Vector2Int(-1, -1);
+    private float cellSize = 18f;
+    private float moveSpeed = 9f;
 
-    public void Setup(GridSystem grid, GridPosition startPos)
+    public void Setup(Vector2Int startPos)
     {
-        gridSystem = grid;
-        currentGridPosition = startPos;
-
-        UpdateVisual();
+        GridPos = startPos;
+        lastGridPos = startPos;
+        UpdateVisualImmediate();
     }
 
-    public void TakeTurn(List<Player> pursuers, MazeCell[,] mazeCells)
+    public IEnumerator TakeTurnCoroutine(List<PlayerMarker> players, MazeCell[,] mazeCells)
     {
         for (int i = 0; i < 2; i++)
         {
-            currentGridPosition = GetBestMove(pursuers, mazeCells);
-        }
+            Vector2Int nextMove = GetAggressiveEscapeMove(players, mazeCells);
 
-        UpdateVisual();
-        HasMovedThisTurn = true;
+            if (nextMove != GridPos)
+            {
+                lastGridPos = GridPos;
+                GridPos = nextMove;
+                yield return StartCoroutine(MoveVisualRoutine());
+            }
+        }
     }
 
-    private GridPosition GetBestMove(List<Player> pursuers, MazeCell[,] mazeCells)
+    private Vector2Int GetAggressiveEscapeMove(List<PlayerMarker> players, MazeCell[,] mazeCells)
     {
-        GridPosition bestPos = currentGridPosition;
-        float maxMinDistance = -1f;
-        bool foundValidMove = false;
-
-        GridPosition[] directions =
+        Vector2Int[] directions =
         {
-            new GridPosition(0, 1),
-            new GridPosition(0, -1),
-            new GridPosition(1, 0),
-            new GridPosition(-1, 0)
+            new Vector2Int(0, 1),
+            new Vector2Int(0, -1),
+            new Vector2Int(1, 0),
+            new Vector2Int(-1, 0),
+            new Vector2Int(0, 0)
         };
 
-        MazeCell currentCell = mazeCells[currentGridPosition.x, currentGridPosition.z];
+        Vector2Int bestMove = GridPos;
+        float bestScore = float.MinValue;
+
+        MazeCell currentCell = mazeCells[GridPos.x, GridPos.y];
 
         foreach (var dir in directions)
         {
-            GridPosition target = new GridPosition(
-                currentGridPosition.x + dir.x,
-                currentGridPosition.z + dir.z
-            );
+            if (!CanMoveInDirection(currentCell, dir)) continue;
 
-            if (gridSystem.IsValidGridPosition(target))
+            Vector2Int target = GridPos + dir;
+
+            if (target.x < 0 || target.x >= mazeCells.GetLength(0) ||
+                target.y < 0 || target.y >= mazeCells.GetLength(1))
+                continue;
+
+            bool isPlayerOnTarget = false;
+
+            foreach (var p in players)
             {
-                bool canMove = false;
-
-                if (dir.z == 1 && currentCell.IsNorthOpen) canMove = true;
-                else if (dir.z == -1 && currentCell.IsSouthOpen) canMove = true;
-                else if (dir.x == 1 && currentCell.IsEastOpen) canMove = true;
-                else if (dir.x == -1 && currentCell.IsWestOpen) canMove = true;
-
-                if (!canMove)
-                    continue;
-
-                float minDistToPursuer = float.MaxValue;
-
-                foreach (var p in pursuers)
+                if (p.GridPos == target)
                 {
-                    float dist = Vector3.Distance(
-                        new Vector3(target.x, 0, target.z),
-                        new Vector3(p.GetGridPosition().x, 0, p.GetGridPosition().z)
-                    );
-
-                    if (dist < minDistToPursuer)
-                        minDistToPursuer = dist;
+                    isPlayerOnTarget = true;
+                    break;
                 }
+            }
 
-                if (!foundValidMove || minDistToPursuer > maxMinDistance)
-                {
-                    maxMinDistance = minDistToPursuer;
-                    bestPos = target;
-                    foundValidMove = true;
-                }
+            if (isPlayerOnTarget) continue;
+
+            float score = EvaluatePosition(target, players, mazeCells);
+
+            if (target == lastGridPos) score -= 20f;
+            if (target == GridPos) score -= 10f;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestMove = target;
             }
         }
 
-        return bestPos;
+        return bestMove;
     }
 
-    private void UpdateVisual()
+    private float EvaluatePosition(Vector2Int pos, List<PlayerMarker> players, MazeCell[,] mazeCells)
     {
-        transform.position = gridSystem.GetWorldPosition(
-            currentGridPosition.x,
-            currentGridPosition.z
+        float score = 0;
+
+        foreach (var p in players)
+        {
+            float dist = Vector2Int.Distance(pos, p.GridPos);
+
+            if (dist < 2) score -= 50f;
+
+            score += dist * 5f;
+        }
+
+        int exits = 0;
+        MazeCell targetCell = mazeCells[pos.x, pos.y];
+
+        if (targetCell.IsNorthOpen) exits++;
+        if (targetCell.IsSouthOpen) exits++;
+        if (targetCell.IsEastOpen) exits++;
+        if (targetCell.IsWestOpen) exits++;
+
+        if (exits <= 1) score -= 30f;
+
+        score += exits * 3f;
+
+        return score;
+    }
+
+    private bool CanMoveInDirection(MazeCell cell, Vector2Int dir)
+    {
+        if (dir == Vector2Int.up) return cell.IsNorthOpen;
+        if (dir == Vector2Int.down) return cell.IsSouthOpen;
+        if (dir == Vector2Int.right) return cell.IsEastOpen;
+        if (dir == Vector2Int.left) return cell.IsWestOpen;
+
+        return false;
+    }
+
+    private IEnumerator MoveVisualRoutine()
+    {
+        Vector3 targetWorldPos = CalculateWorldPos(GridPos);
+
+        while (Vector3.Distance(transform.position, targetWorldPos) > 0.01f)
+        {
+            transform.position = Vector3.MoveTowards(
+                transform.position,
+                targetWorldPos,
+                moveSpeed * Time.deltaTime
+            );
+
+            yield return null;
+        }
+
+        transform.position = targetWorldPos;
+    }
+
+    private void UpdateVisualImmediate()
+    {
+        transform.position = CalculateWorldPos(GridPos);
+    }
+
+    private Vector3 CalculateWorldPos(Vector2Int gridPos)
+    {
+        return new Vector3(
+            gridPos.x * cellSize + (cellSize / 2f),
+            1f,
+            gridPos.y * cellSize + (cellSize / 2f)
         );
-    }
-
-    public GridPosition GetGridPosition()
-    {
-        return currentGridPosition;
     }
 }
