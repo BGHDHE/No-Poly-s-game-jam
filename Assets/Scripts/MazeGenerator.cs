@@ -15,14 +15,17 @@ public class MazeGenerator : MonoBehaviour
 
     public MazeCell[,] GetCells() => cells;
 
-private void Start()
-{
-    if (CellPrefabs == null || CellPrefabs.Count == 0) return;
+    public GameObject powerUpPrefab;
 
-    GenerateMaze();
-    SpawnPlayersInCorners();
-    CenterCamera();
-}
+    private void Start()
+    {
+        if (CellPrefabs == null || CellPrefabs.Count == 0) return;
+
+        GenerateMaze();
+        SpawnPlayersInCorners();
+        CenterCamera();
+        SpawnPowerUps(5);
+    }
 
     void GenerateMaze()
     {
@@ -61,20 +64,36 @@ private void Start()
     }
 
     void CenterCamera()
-{
-    Camera mainCam = Camera.main;
-    if (mainCam == null) return;
+    {
+        Camera mainCam = Camera.main;
+        if (mainCam == null) return;
 
-    float centerX = (mazeWidth * cellSize) / 2f - (cellSize / 2f) + 6f;
-    float centerZ = 0f;
+        float centerX = (mazeWidth * cellSize) / 2f - (cellSize / 2f) + 6f;
+        float centerZ = 0f;
 
 
-    float height = Mathf.Max(mazeWidth, mazeHeight) * (cellSize / 1.6f);
+        float height = Mathf.Max(mazeWidth, mazeHeight) * (cellSize / 1.6f);
 
-    mainCam.transform.position = new Vector3(centerX, height, centerZ);
+        mainCam.transform.position = new Vector3(centerX, height, centerZ);
     
-    mainCam.transform.rotation = Quaternion.Euler(63f, 0f, 0f);
-}
+        mainCam.transform.rotation = Quaternion.Euler(63f, 0f, 0f);
+    }
+
+    public void SpawnPowerUps(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int randomPos = new Vector2Int(Random.Range(0, mazeWidth), Random.Range(0, mazeHeight));
+            Vector3 worldPos = CalculateWorldPositionFromGrid(randomPos);
+        
+            GameObject go = Instantiate(powerUpPrefab, worldPos, Quaternion.identity);
+            PowerUp pu = go.GetComponent<PowerUp>();
+            pu.Setup(randomPos);
+
+            GameManager.Instance.RegisterPowerUp(pu);
+        }
+    }   
+
 
     void CreateGrid()
     {

@@ -1079,6 +1079,7 @@ MonoBehaviour:
   moveSpeed: 20
   indicatorPrefab: {fileID: 6914334234424846123, guid: 517d5da2d7bfebf408c8ce3413830f6b, type: 3}
   indicatorOffset: {x: 0, y: 3, z: 0}
+  powerUpPrefab: {fileID: 2924986082486711951, guid: 0597e54cca70e91debded31dc3be9d81, type: 3}
 --- !u!4 &177747427
 Transform:
   m_ObjectHideFlags: 0
@@ -1136,6 +1137,7 @@ MonoBehaviour:
   - {fileID: 8439718081963735333, guid: 7fc32e4d5ccffc70aa1720c9e7775be1, type: 3}
   playerPrefab: {fileID: 7514675535372589151, guid: 5d18f62e23d15ed029b2403bdf626433, type: 3}
   enemyPrefab: {fileID: 3967108684766030035, guid: c1b827fb4c547400abb6da3e6ab13c65, type: 3}
+  powerUpPrefab: {fileID: 2924986082486711951, guid: 0597e54cca70e91debded31dc3be9d81, type: 3}
 --- !u!4 &239722877
 Transform:
   m_ObjectHideFlags: 0

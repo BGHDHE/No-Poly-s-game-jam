@@ -12,9 +12,16 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject indicatorPrefab;
     [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 0f, 0f);
 
+    [SerializeField] private GameObject powerUpPrefab;
+
     private List<PlayerMarker> players = new List<PlayerMarker>();
+    private List<PowerUp> spawnedPowerUps = new List<PowerUp>();
+
     private int currentPlayerIndex = 0;
+    private int movesRemaining = 0;
+
     private bool isMoving = false;
+
     private EnemyAI enemy;
     private GameObject currentIndicator;
 
@@ -44,23 +51,6 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    private IEnumerator ResetSequence()
-    {
-        isMoving = true;
-
-        yield return new WaitForSeconds(1f);
-
-        mazeGenerator.GenerateNewLevel();
-
-        yield return new WaitForEndOfFrame();
-
-        players.Clear();
-        InitializePlayers();
-
-        currentPlayerIndex = 0;
-        isMoving = false;
-    }
-
     public void HandleMoveInput(Vector2 input)
     {
         if (isMoving || players.Count == 0) return;
@@ -81,6 +71,8 @@ public class GameManager : MonoBehaviour
     public void HandleSkipInput()
     {
         if (isMoving) return;
+
+        movesRemaining = 0;
         NextTurn();
     }
 
@@ -92,9 +84,7 @@ public class GameManager : MonoBehaviour
 
         if (targetGridPos.x < 0 || targetGridPos.x >= mazeGenerator.mazeWidth ||
             targetGridPos.y < 0 || targetGridPos.y >= mazeGenerator.mazeHeight)
-        {
             return;
-        }
 
         MazeCell currentCell = mazeGenerator.GetCells()[currentGridPos.x, currentGridPos.y];
         bool canMove = false;
@@ -106,58 +96,115 @@ public class GameManager : MonoBehaviour
 
         if (canMove)
         {
+            movesRemaining--;
             StartCoroutine(MoveRoutine(player, targetGridPos));
         }
     }
 
-private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
-{
-    isMoving = true;
-
-    player.GridPos = targetGridPos;
-
-    float cellSize = 18f;
-    Vector3 offset = new Vector3(0f, 0f, 0f);
-    Vector3 targetWorldPos = new Vector3(
-        targetGridPos.x * cellSize + (cellSize / 2f),
-        player.transform.position.y,
-        targetGridPos.y * cellSize + (cellSize / 2f)
-    );
-
-    SetPlayerBool(player, "isAlerted", false);
-    SetPlayerBool(player, "isRunning", true);
-
-    while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
+    private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
     {
-        Vector3 direction = (targetWorldPos - player.transform.position).normalized;
-        if (direction != Vector3.zero)
+        isMoving = true;
+        player.GridPos = targetGridPos;
+
+        float cellSize = 18f;
+
+        Vector3 targetWorldPos = new Vector3(
+            targetGridPos.x * cellSize + (cellSize / 2f),
+            player.transform.position.y,
+            targetGridPos.y * cellSize + (cellSize / 2f)
+        );
+
+        SetPlayerBool(player, "isRunning", true);
+
+        while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
         {
-            Quaternion lookRotation = Quaternion.LookRotation(direction);
-            player.transform.rotation = Quaternion.Slerp(player.transform.rotation, lookRotation, Time.deltaTime * 30f);
+            Vector3 direction = (targetWorldPos - player.transform.position).normalized;
+
+            if (direction != Vector3.zero)
+            {
+                Quaternion lookRotation = Quaternion.LookRotation(direction);
+
+                player.transform.rotation = Quaternion.Slerp(
+                    player.transform.rotation,
+                    lookRotation,
+                    Time.deltaTime * 15f
+                );
+            }
+
+            player.transform.position = Vector3.MoveTowards(
+                player.transform.position,
+                targetWorldPos,
+                moveSpeed * Time.deltaTime
+            );
+
+            yield return null;
         }
 
-        player.transform.position = Vector3.MoveTowards(
-            player.transform.position,
-            targetWorldPos,
-            moveSpeed * Time.deltaTime
-        );
-        yield return null;
+        player.transform.position = targetWorldPos;
+        SetPlayerBool(player, "isRunning", false);
+
+        CheckForPowerUp(player);
+
+        isMoving = false;
+
+        if (CheckGameOver()) yield break;
+
+        if (movesRemaining > 0)
+        {
+            UpdateTurnIndicator();
+        }
+        else
+        {
+            NextTurn();
+        }
     }
 
-    player.transform.position = targetWorldPos;
+    private void CheckForPowerUp(PlayerMarker player)
+    {
+        PowerUp found = spawnedPowerUps.Find(p => p.GridPos == player.GridPos);
 
-    SetPlayerBool(player, "isRunning", false);
-    
-    isMoving = false;
+        if (found != null)
+        {
+            player.StepRange *= 2;
 
-    if (CheckGameOver()) yield break;
+            spawnedPowerUps.Remove(found);
+            found.Collect();
 
-    NextTurn();
-}
+            Debug.Log($"Player range is now {player.StepRange}!");
+        }
+    }
+
+    public void RegisterPowerUp(PowerUp pu)
+    {
+        if (!spawnedPowerUps.Contains(pu))
+        {
+            spawnedPowerUps.Add(pu);
+        }
+    }
+
+    private IEnumerator ResetSequence()
+    {
+        isMoving = true;
+
+        yield return new WaitForSeconds(1f);
+
+        spawnedPowerUps.Clear();
+
+        mazeGenerator.GenerateNewLevel();
+
+        yield return new WaitForEndOfFrame();
+
+        players.Clear();
+        InitializePlayers();
+
+        currentPlayerIndex = 0;
+        isMoving = false;
+    }
 
     private void SetPlayerBool(PlayerMarker player, string paramName, bool state)
     {
         Animator anim = player.GetComponentInChildren<Animator>();
+
         if (anim != null)
         {
             anim.SetBool(paramName, state);
@@ -209,32 +256,45 @@ private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
         UpdateTurnIndicator();
     }
 
-private void UpdateTurnIndicator()
-{
-    ResetAllPlayersAnimation();
-
-    if (players.Count > 0 && currentPlayerIndex < players.Count)
+    private void UpdateTurnIndicator()
     {
-        PlayerMarker currentPlayer = players[currentPlayerIndex];
+        ResetAllPlayersAnimation();
 
-        SetPlayerBool(currentPlayer, "isAlerted", true);
-
-        if (currentIndicator != null) Destroy(currentIndicator);
-        if (indicatorPrefab != null)
+        if (players.Count > 0 && currentPlayerIndex < players.Count)
         {
-            Vector3 spawnPos = currentPlayer.transform.position + indicatorOffset;
-            currentIndicator = Instantiate(indicatorPrefab, spawnPos, Quaternion.identity);
-            currentIndicator.transform.SetParent(currentPlayer.transform);
+            PlayerMarker currentPlayer = players[currentPlayerIndex];
+
+            if (movesRemaining <= 0)
+            {
+                movesRemaining = currentPlayer.StepRange;
+            }
+
+            SetPlayerBool(currentPlayer, "isAlerted", true);
+
+            if (currentIndicator != null)
+                Destroy(currentIndicator);
+
+            if (indicatorPrefab != null)
+            {
+                Vector3 spawnPos = currentPlayer.transform.position + indicatorOffset;
+
+                currentIndicator = Instantiate(
+                    indicatorPrefab,
+                    spawnPos,
+                    Quaternion.identity
+                );
+
+                currentIndicator.transform.SetParent(currentPlayer.transform);
+            }
         }
     }
-}
 
-private void ResetAllPlayersAnimation()
-{
-    foreach (var player in players)
+    private void ResetAllPlayersAnimation()
     {
-        SetPlayerBool(player, "isAlerted", false);
-        SetPlayerBool(player, "isRunning", false);
+        foreach (var player in players)
+        {
+            SetPlayerBool(player, "isAlerted", false);
+            SetPlayerBool(player, "isRunning", false);
+        }
     }
-}
 }
