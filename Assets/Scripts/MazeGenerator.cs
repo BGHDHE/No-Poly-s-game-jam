@@ -5,21 +5,26 @@ public class MazeGenerator : MonoBehaviour
 {
     public int mazeWidth;
     public int mazeHeight;
+
     private float cellSize = 18f;
 
     public List<GameObject> CellPrefabs;
     public GameObject playerPrefab;
     public GameObject enemyPrefab;
 
+    public GameObject powerUpPrefab;
+
+    public GameObject rangePowerUpPrefab;
+    public GameObject ghostPowerUpPrefab;
+
     private MazeCell[,] cells;
 
     public MazeCell[,] GetCells() => cells;
 
-    public GameObject powerUpPrefab;
-
     private void Start()
     {
-        if (CellPrefabs == null || CellPrefabs.Count == 0) return;
+        if (CellPrefabs == null || CellPrefabs.Count == 0)
+            return;
 
         GenerateMaze();
         SpawnPlayersInCorners();
@@ -66,16 +71,15 @@ public class MazeGenerator : MonoBehaviour
     void CenterCamera()
     {
         Camera mainCam = Camera.main;
-        if (mainCam == null) return;
+        if (mainCam == null)
+            return;
 
         float centerX = (mazeWidth * cellSize) / 2f - (cellSize / 2f) + 6f;
         float centerZ = 0f;
 
-
         float height = Mathf.Max(mazeWidth, mazeHeight) * (cellSize / 1.6f);
 
         mainCam.transform.position = new Vector3(centerX, height, centerZ);
-    
         mainCam.transform.rotation = Quaternion.Euler(63f, 0f, 0f);
     }
 
@@ -83,21 +87,30 @@ public class MazeGenerator : MonoBehaviour
     {
         for (int i = 0; i < count; i++)
         {
-            Vector2Int randomPos = new Vector2Int(Random.Range(0, mazeWidth), Random.Range(0, mazeHeight));
-            Vector3 worldPos = CalculateWorldPositionFromGrid(randomPos);
-        
-            GameObject go = Instantiate(powerUpPrefab, worldPos, Quaternion.identity);
-            PowerUp pu = go.GetComponent<PowerUp>();
-            pu.Setup(randomPos);
+            Vector2Int randomPos = new Vector2Int(
+                Random.Range(0, mazeWidth),
+                Random.Range(0, mazeHeight)
+            );
 
+            Vector3 worldPos = CalculateWorldPositionFromGrid(randomPos);
+
+            bool spawnGhost = Random.value > 0.5f;
+            GameObject prefabToSpawn = spawnGhost ? ghostPowerUpPrefab : rangePowerUpPrefab;
+
+            GameObject go = Instantiate(prefabToSpawn, worldPos, Quaternion.identity);
+            PowerUp pu = go.GetComponent<PowerUp>();
+
+            pu.type = spawnGhost ? PowerUpType.Ghost : PowerUpType.Range;
+
+            pu.Setup(randomPos);
             GameManager.Instance.RegisterPowerUp(pu);
         }
-    }   
-
+    }
 
     void CreateGrid()
     {
         cells = new MazeCell[mazeWidth, mazeHeight];
+
         Vector3 offset = new Vector3(8.8f, 0f, 1f);
 
         for (int x = 0; x < mazeWidth; x++)
@@ -119,7 +132,8 @@ public class MazeGenerator : MonoBehaviour
 
     void SpawnPlayersInCorners()
     {
-        if (playerPrefab == null || enemyPrefab == null) return;
+        if (playerPrefab == null || enemyPrefab == null)
+            return;
 
         List<Vector2Int> corners = new List<Vector2Int>
         {
@@ -147,8 +161,8 @@ public class MazeGenerator : MonoBehaviour
         foreach (Vector2Int playerGridPos in corners)
         {
             Vector3 playerSpawnPos = CalculateWorldPositionFromGrid(playerGridPos);
-            GameObject playerObj = Instantiate(playerPrefab, playerSpawnPos, Quaternion.identity);
 
+            GameObject playerObj = Instantiate(playerPrefab, playerSpawnPos, Quaternion.identity);
             PlayerMarker marker = playerObj.GetComponent<PlayerMarker>();
 
             if (marker != null)
@@ -173,6 +187,7 @@ public class MazeGenerator : MonoBehaviour
     void GenerateDFS()
     {
         Stack<Vector2Int> stack = new Stack<Vector2Int>();
+
         Vector2Int current = new Vector2Int(0, 0);
 
         bool[,] visited = new bool[mazeWidth, mazeHeight];
@@ -191,6 +206,7 @@ public class MazeGenerator : MonoBehaviour
                 stack.Push(current);
 
                 Vector2Int chosen = neighbors[Random.Range(0, neighbors.Count)];
+
                 RemoveWall(current, chosen);
 
                 visited[chosen.x, chosen.y] = true;

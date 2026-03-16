@@ -12,8 +12,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject indicatorPrefab;
     [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 0f, 0f);
 
-    [SerializeField] private GameObject powerUpPrefab;
-
     private List<PlayerMarker> players = new List<PlayerMarker>();
     private List<PowerUp> spawnedPowerUps = new List<PowerUp>();
 
@@ -79,6 +77,7 @@ public class GameManager : MonoBehaviour
     private void TryMoveCurrentPlayer(Vector2Int direction)
     {
         PlayerMarker player = players[currentPlayerIndex];
+
         Vector2Int currentGridPos = player.GridPos;
         Vector2Int targetGridPos = currentGridPos + direction;
 
@@ -87,23 +86,35 @@ public class GameManager : MonoBehaviour
             return;
 
         MazeCell currentCell = mazeGenerator.GetCells()[currentGridPos.x, currentGridPos.y];
-        bool canMove = false;
 
-        if (direction == Vector2Int.up && currentCell.IsNorthOpen) canMove = true;
-        if (direction == Vector2Int.down && currentCell.IsSouthOpen) canMove = true;
-        if (direction == Vector2Int.right && currentCell.IsEastOpen) canMove = true;
-        if (direction == Vector2Int.left && currentCell.IsWestOpen) canMove = true;
+        bool canMoveNormal = false;
 
-        if (canMove)
+        if (direction == Vector2Int.up && currentCell.IsNorthOpen) canMoveNormal = true;
+        if (direction == Vector2Int.down && currentCell.IsSouthOpen) canMoveNormal = true;
+        if (direction == Vector2Int.right && currentCell.IsEastOpen) canMoveNormal = true;
+        if (direction == Vector2Int.left && currentCell.IsWestOpen) canMoveNormal = true;
+
+        if (canMoveNormal)
         {
             movesRemaining--;
             StartCoroutine(MoveRoutine(player, targetGridPos));
+        }
+        else if (player.GhostCharges > 0)
+        {
+            player.GhostCharges--;
+            movesRemaining--;
+
+            StartCoroutine(GhostEffectRoutine(player));
+            StartCoroutine(MoveRoutine(player, targetGridPos));
+
+            Debug.Log($"Ghosted through wall! Charges left: {player.GhostCharges}");
         }
     }
 
     private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
     {
         isMoving = true;
+
         player.GridPos = targetGridPos;
 
         float cellSize = 18f;
@@ -141,6 +152,7 @@ public class GameManager : MonoBehaviour
         }
 
         player.transform.position = targetWorldPos;
+
         SetPlayerBool(player, "isRunning", false);
 
         CheckForPowerUp(player);
@@ -165,13 +177,34 @@ public class GameManager : MonoBehaviour
 
         if (found != null)
         {
-            player.StepRange *= 2;
+            if (found.type == PowerUpType.Ghost)
+            {
+                player.GhostCharges += 2;
+            }
+            else if (found.type == PowerUpType.Range)
+            {
+                player.StepRange *= 2;
+            }
 
             spawnedPowerUps.Remove(found);
             found.Collect();
-
-            Debug.Log($"Player range is now {player.StepRange}!");
         }
+    }
+
+    private IEnumerator GhostEffectRoutine(PlayerMarker player)
+    {
+        Renderer[] renderers = player.GetComponentsInChildren<Renderer>();
+
+        Color originalColor = renderers[0].material.color;
+        Color ghostColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0.4f);
+
+        foreach (var r in renderers)
+            r.material.color = ghostColor;
+
+        yield return new WaitForSeconds(1f);
+
+        foreach (var r in renderers)
+            r.material.color = originalColor;
     }
 
     public void RegisterPowerUp(PowerUp pu)

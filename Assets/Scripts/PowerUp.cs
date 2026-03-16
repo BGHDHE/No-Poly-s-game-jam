@@ -1,10 +1,13 @@
 using UnityEngine;
 
+public enum PowerUpType { Range, Ghost }
+
 public class PowerUp : MonoBehaviour
 {
+    public PowerUpType type;
     public Vector2Int GridPos { get; private set; }
 
-    public void Setup(Vector2Int pos)
+    public void Setup(UnityEngine.Vector2Int pos)
     {
         GridPos = pos;
     }
