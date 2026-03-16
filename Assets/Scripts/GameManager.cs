@@ -23,6 +23,9 @@ public class GameManager : MonoBehaviour
     private EnemyAI enemy;
     private GameObject currentIndicator;
 
+    [SerializeField] private GameObject ghostParticlePrefab;
+    [SerializeField] private GameObject rangeParticlePrefab;
+
     private void Awake()
     {
         Instance = this;
@@ -31,6 +34,44 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         Invoke(nameof(InitializePlayers), 0.2f);
+    }
+
+    private IEnumerator GhostEffectRoutine(PlayerMarker player)
+    {
+        GameObject effectGo = null;
+        ParticleSystem ps = null;
+
+        if (ghostParticlePrefab != null)
+        {
+            effectGo = Instantiate(ghostParticlePrefab, player.transform.position, Quaternion.identity);
+            effectGo.transform.SetParent(player.transform);
+            ps = effectGo.GetComponent<ParticleSystem>();
+        }
+
+        Renderer[] renderers = player.GetComponentsInChildren<Renderer>();
+        Color originalColor = Color.white;
+
+        if (renderers.Length > 0)
+        {
+            originalColor = renderers[0].material.color;
+            Color ghostColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0.4f);
+
+            foreach (var r in renderers)
+                r.material.color = ghostColor;
+        }
+
+        yield return new WaitForSeconds(1f);
+
+        if (renderers.Length > 0)
+        {
+            foreach (var r in renderers)
+                r.material.color = originalColor;
+        }
+
+        if (ps != null)
+        {
+            ps.Stop();
+        }
     }
 
     private bool CheckGameOver()
@@ -184,27 +225,24 @@ public class GameManager : MonoBehaviour
             else if (found.type == PowerUpType.Range)
             {
                 player.StepRange *= 2;
+
+                if (rangeParticlePrefab != null)
+                {
+                    GameObject effectGo = Instantiate(rangeParticlePrefab, player.transform.position, player.transform.rotation);
+                    effectGo.transform.SetParent(player.transform);
+
+                    ParticleSystem ps = effectGo.GetComponent<ParticleSystem>();
+
+                    if (ps != null)
+                    {
+                        if (!ps.isPlaying) ps.Play();
+                    }
+                }
             }
 
             spawnedPowerUps.Remove(found);
             found.Collect();
         }
-    }
-
-    private IEnumerator GhostEffectRoutine(PlayerMarker player)
-    {
-        Renderer[] renderers = player.GetComponentsInChildren<Renderer>();
-
-        Color originalColor = renderers[0].material.color;
-        Color ghostColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0.4f);
-
-        foreach (var r in renderers)
-            r.material.color = ghostColor;
-
-        yield return new WaitForSeconds(1f);
-
-        foreach (var r in renderers)
-            r.material.color = originalColor;
     }
 
     public void RegisterPowerUp(PowerUp pu)

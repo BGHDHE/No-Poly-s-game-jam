@@ -4,16 +4,15 @@ using System.Collections;
 
 public class EnemyAI : MonoBehaviour
 {
-    public Vector2Int GridPos { get; set; } // Property-vé tettem, hogy kívülről is elérhető legyen ha kell
+    public Vector2Int GridPos { get; set; }
 
     private Vector2Int lastGridPos = new Vector2Int(-1, -1);
     private float cellSize = 18f;
     private float moveSpeed = 9f;
-    private Animator anim; // Referencia az animátorhoz
+    private Animator anim;
 
     private void Awake()
     {
-        // Megkeressük az animátort a gyerek objektumok között (mint a playernél)
         anim = GetComponentInChildren<Animator>();
     }
 
@@ -39,12 +38,10 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    // --- Itt történik a varázslat: Mozgás, Forgás és Animáció ---
     private IEnumerator MoveVisualRoutine()
     {
         Vector3 targetWorldPos = CalculateWorldPos(GridPos);
 
-        // Animáció indítása
         SetAnimBool("isRunning", true);
 
         while (Vector3.Distance(transform.position, targetWorldPos) > 0.05f)
@@ -53,7 +50,6 @@ public class EnemyAI : MonoBehaviour
 
             if (direction != Vector3.zero)
             {
-                // Simított forgás a cél felé
                 Quaternion lookRotation = Quaternion.LookRotation(direction);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation,
@@ -73,7 +69,6 @@ public class EnemyAI : MonoBehaviour
 
         transform.position = targetWorldPos;
         
-        // Animáció leállítása
         SetAnimBool("isRunning", false);
     }
 
@@ -85,7 +80,6 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    // ... (A többi metódus: GetAggressiveEscapeMove, EvaluatePosition, stb. változatlan marad)
 
     private void UpdateVisualImmediate()
     {
@@ -94,15 +88,13 @@ public class EnemyAI : MonoBehaviour
 
     private Vector3 CalculateWorldPos(Vector2Int gridPos)
     {
-        // Itt figyeltem, hogy az Y pozíció 1f legyen, ahogy az eredeti kódodban volt
         return new Vector3(
             gridPos.x * cellSize + (cellSize / 2f),
-            5f, 
+            0f, 
             gridPos.y * cellSize + (cellSize / 2f)
         );
     }
 
-    // Segédmetódusok a mozgáshoz (az eredeti kódodból)
     private bool CanMoveInDirection(MazeCell cell, Vector2Int dir)
     {
         if (dir == Vector2Int.up) return cell.IsNorthOpen;

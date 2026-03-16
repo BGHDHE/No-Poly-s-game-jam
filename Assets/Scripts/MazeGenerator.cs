@@ -29,7 +29,7 @@ public class MazeGenerator : MonoBehaviour
         GenerateMaze();
         SpawnPlayersInCorners();
         CenterCamera();
-        SpawnPowerUps(5);
+        SpawnPowerUps(10);
     }
 
     void GenerateMaze()
