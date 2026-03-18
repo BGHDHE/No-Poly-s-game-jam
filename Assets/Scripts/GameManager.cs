@@ -9,22 +9,19 @@ public class GameManager : MonoBehaviour
     [SerializeField] private MazeGenerator mazeGenerator;
     [SerializeField] private float moveSpeed;
 
-    [SerializeField] private GameObject indicatorPrefab;
-    [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 0f, 0f);
+    [SerializeField] private GameObject ghostAuraPersistentPrefab;
+    [SerializeField] private GameObject ghostBurstActionPrefab;
+    [SerializeField] private GameObject rangeParticlePrefab;
+    [SerializeField] private float gameOverAnimationDelay = 2.0f;
 
-    private List<PlayerMarker> players = new List<PlayerMarker>();
-    private List<PowerUp> spawnedPowerUps = new List<PowerUp>();
+    private List<PlayerMarker> players = new();
+    private List<PowerUp> spawnedPowerUps = new();
 
     private int currentPlayerIndex = 0;
     private int movesRemaining = 0;
-
     private bool isMoving = false;
 
     private EnemyAI enemy;
-    private GameObject currentIndicator;
-
-    [SerializeField] private GameObject ghostParticlePrefab;
-    [SerializeField] private GameObject rangeParticlePrefab;
 
     private void Awake()
     {
@@ -38,102 +35,46 @@ public class GameManager : MonoBehaviour
 
     private IEnumerator GhostEffectRoutine(PlayerMarker player)
     {
-        GameObject effectGo = null;
-        ParticleSystem ps = null;
-
-        if (ghostParticlePrefab != null)
+        if (ghostBurstActionPrefab != null)
         {
-            effectGo = Instantiate(ghostParticlePrefab, player.transform.position, Quaternion.identity);
-            effectGo.transform.SetParent(player.transform);
-            ps = effectGo.GetComponent<ParticleSystem>();
+            GameObject burst = Instantiate(ghostBurstActionPrefab, player.transform.position, Quaternion.identity);
+            burst.transform.SetParent(player.transform);
+            Destroy(burst, 2f);
         }
 
         Renderer[] renderers = player.GetComponentsInChildren<Renderer>();
-        Color originalColor = Color.white;
 
         if (renderers.Length > 0)
         {
-            originalColor = renderers[0].material.color;
-            Color ghostColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0.4f);
+            Color originalColor = renderers[0].material.color;
+            Color ghostColor = new(originalColor.r, originalColor.g, originalColor.b, 0.4f);
 
             foreach (var r in renderers)
                 r.material.color = ghostColor;
-        }
 
-        yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(0.8f);
 
-        if (renderers.Length > 0)
-        {
             foreach (var r in renderers)
                 r.material.color = originalColor;
         }
-
-        if (ps != null)
-        {
-            ps.Stop();
-        }
-    }
-
-    private bool CheckGameOver()
-    {
-        if (enemy == null) return false;
-
-        foreach (var player in players)
-        {
-            if (player.GridPos == enemy.GridPos)
-            {
-                StartCoroutine(ResetSequence());
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public void HandleMoveInput(Vector2 input)
-    {
-        if (isMoving || players.Count == 0) return;
-
-        Vector2Int moveDir = Vector2Int.zero;
-
-        if (input.y > 0.5f) moveDir = new Vector2Int(0, 1);
-        else if (input.y < -0.5f) moveDir = new Vector2Int(0, -1);
-        else if (input.x > 0.5f) moveDir = new Vector2Int(1, 0);
-        else if (input.x < -0.5f) moveDir = new Vector2Int(-1, 0);
-
-        if (moveDir != Vector2Int.zero)
-        {
-            TryMoveCurrentPlayer(moveDir);
-        }
-    }
-
-    public void HandleSkipInput()
-    {
-        if (isMoving) return;
-
-        movesRemaining = 0;
-        NextTurn();
     }
 
     private void TryMoveCurrentPlayer(Vector2Int direction)
     {
         PlayerMarker player = players[currentPlayerIndex];
-
-        Vector2Int currentGridPos = player.GridPos;
-        Vector2Int targetGridPos = currentGridPos + direction;
+        Vector2Int targetGridPos = player.GridPos + direction;
 
         if (targetGridPos.x < 0 || targetGridPos.x >= mazeGenerator.mazeWidth ||
             targetGridPos.y < 0 || targetGridPos.y >= mazeGenerator.mazeHeight)
             return;
 
-        MazeCell currentCell = mazeGenerator.GetCells()[currentGridPos.x, currentGridPos.y];
+        MazeCell currentCell = mazeGenerator.GetCells()[player.GridPos.x, player.GridPos.y];
 
-        bool canMoveNormal = false;
-
-        if (direction == Vector2Int.up && currentCell.IsNorthOpen) canMoveNormal = true;
-        if (direction == Vector2Int.down && currentCell.IsSouthOpen) canMoveNormal = true;
-        if (direction == Vector2Int.right && currentCell.IsEastOpen) canMoveNormal = true;
-        if (direction == Vector2Int.left && currentCell.IsWestOpen) canMoveNormal = true;
+        bool canMoveNormal =
+            (direction == Vector2Int.up && currentCell.IsNorthOpen) ||
+            (direction == Vector2Int.down && currentCell.IsSouthOpen) ||
+            (direction == Vector2Int.right && currentCell.IsEastOpen) ||
+            (direction == Vector2Int.left && currentCell.IsWestOpen);
 
         if (canMoveNormal)
         {
@@ -146,48 +87,89 @@ public class GameManager : MonoBehaviour
             movesRemaining--;
 
             StartCoroutine(GhostEffectRoutine(player));
-            StartCoroutine(MoveRoutine(player, targetGridPos));
 
-            Debug.Log($"Ghosted through wall! Charges left: {player.GhostCharges}");
+            if (player.GhostCharges <= 0 && player.activePersistentGhostEffect != null)
+            {
+                var ps = player.activePersistentGhostEffect.GetComponent<ParticleSystem>();
+                if (ps != null) ps.Stop();
+
+                Destroy(player.activePersistentGhostEffect, 2f);
+                player.activePersistentGhostEffect = null;
+            }
+
+            StartCoroutine(MoveRoutine(player, targetGridPos));
         }
+    }
+
+    private void CheckForPowerUp(PlayerMarker player)
+    {
+        PowerUp found = spawnedPowerUps.Find(p => p.GridPos == player.GridPos);
+        if (found == null) return;
+
+        if (found.type == PowerUpType.Ghost)
+        {
+            player.GhostCharges += 2;
+
+            if (player.activePersistentGhostEffect == null && ghostAuraPersistentPrefab != null)
+            {
+                player.activePersistentGhostEffect = Instantiate(
+                    ghostAuraPersistentPrefab,
+                    player.transform.position,
+                    Quaternion.identity);
+
+                player.activePersistentGhostEffect.transform.SetParent(player.transform);
+            }
+        }
+        else if (found.type == PowerUpType.Range)
+        {
+            player.StepRange *= 2;
+
+            if (rangeParticlePrefab != null)
+            {
+                GameObject effect = Instantiate(
+                    rangeParticlePrefab,
+                    player.transform.position,
+                    player.transform.rotation);
+
+                effect.transform.SetParent(player.transform);
+            }
+        }
+
+        spawnedPowerUps.Remove(found);
+        found.Collect();
     }
 
     private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
     {
         isMoving = true;
-
         player.GridPos = targetGridPos;
 
         float cellSize = 18f;
 
-        Vector3 targetWorldPos = new Vector3(
-            targetGridPos.x * cellSize + (cellSize / 2f),
+        Vector3 targetWorldPos = new(
+            targetGridPos.x * cellSize + cellSize / 2f,
             player.transform.position.y,
-            targetGridPos.y * cellSize + (cellSize / 2f)
+            targetGridPos.y * cellSize + cellSize / 2f
         );
 
         SetPlayerBool(player, "isRunning", true);
 
         while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
         {
-            Vector3 direction = (targetWorldPos - player.transform.position).normalized;
+            Vector3 dir = (targetWorldPos - player.transform.position).normalized;
 
-            if (direction != Vector3.zero)
+            if (dir != Vector3.zero)
             {
-                Quaternion lookRotation = Quaternion.LookRotation(direction);
-
                 player.transform.rotation = Quaternion.Slerp(
                     player.transform.rotation,
-                    lookRotation,
-                    Time.deltaTime * 15f
-                );
+                    Quaternion.LookRotation(dir),
+                    Time.deltaTime * 15f);
             }
 
             player.transform.position = Vector3.MoveTowards(
                 player.transform.position,
                 targetWorldPos,
-                moveSpeed * Time.deltaTime
-            );
+                moveSpeed * Time.deltaTime);
 
             yield return null;
         }
@@ -195,62 +177,89 @@ public class GameManager : MonoBehaviour
         player.transform.position = targetWorldPos;
 
         SetPlayerBool(player, "isRunning", false);
-
         CheckForPowerUp(player);
 
         isMoving = false;
 
-        if (CheckGameOver()) yield break;
+        if (CheckGameOver())
+            yield break;
 
         if (movesRemaining > 0)
-        {
             UpdateTurnIndicator();
-        }
         else
-        {
             NextTurn();
-        }
     }
 
-    private void CheckForPowerUp(PlayerMarker player)
+    private bool CheckGameOver()
     {
-        PowerUp found = spawnedPowerUps.Find(p => p.GridPos == player.GridPos);
+        if (enemy == null) return false;
 
-        if (found != null)
+        foreach (var p in players)
         {
-            if (found.type == PowerUpType.Ghost)
+            if (p.GridPos == enemy.GridPos)
             {
-                player.GhostCharges += 2;
+                StartCoroutine(GameOverAnimationRoutine(p, enemy));
+                return true;
             }
-            else if (found.type == PowerUpType.Range)
-            {
-                player.StepRange *= 2;
+        }
 
-                if (rangeParticlePrefab != null)
-                {
-                    GameObject effectGo = Instantiate(rangeParticlePrefab, player.transform.position, player.transform.rotation);
-                    effectGo.transform.SetParent(player.transform);
+        return false;
+    }
 
-                    ParticleSystem ps = effectGo.GetComponent<ParticleSystem>();
+    private IEnumerator GameOverAnimationRoutine(PlayerMarker winnerPlayer, EnemyAI loserEnemy)
+    {
+        isMoving = true;
 
-                    if (ps != null)
-                    {
-                        if (!ps.isPlaying) ps.Play();
-                    }
-                }
-            }
+        Vector3 playerPos = winnerPlayer.transform.position;
+        Vector3 enemyPos = loserEnemy.transform.position;
 
-            spawnedPowerUps.Remove(found);
-            found.Collect();
+        winnerPlayer.transform.LookAt(new Vector3(enemyPos.x, playerPos.y, enemyPos.z));
+        loserEnemy.transform.LookAt(new Vector3(playerPos.x, enemyPos.y, playerPos.z));
+
+        Animator playerAnim = winnerPlayer.GetComponentInChildren<Animator>();
+        Animator enemyAnim = loserEnemy.GetComponentInChildren<Animator>();
+
+        if (playerAnim != null)
+            playerAnim.SetTrigger("attack");
+
+        yield return new WaitForSeconds(0.2f);
+
+        if (enemyAnim != null)
+            enemyAnim.SetTrigger("die");
+
+        yield return new WaitForSeconds(gameOverAnimationDelay);
+
+        StartCoroutine(ResetSequence());
+    }
+
+    public void HandleMoveInput(Vector2 input)
+    {
+        if (isMoving || players.Count == 0) return;
+
+        Vector2Int moveDir = Vector2Int.zero;
+
+        if (input.y > 0.5f) moveDir = Vector2Int.up;
+        else if (input.y < -0.5f) moveDir = Vector2Int.down;
+        else if (input.x > 0.5f) moveDir = Vector2Int.right;
+        else if (input.x < -0.5f) moveDir = Vector2Int.left;
+
+        if (moveDir != Vector2Int.zero)
+            TryMoveCurrentPlayer(moveDir);
+    }
+
+    public void HandleSkipInput()
+    {
+        if (!isMoving)
+        {
+            movesRemaining = 0;
+            NextTurn();
         }
     }
 
     public void RegisterPowerUp(PowerUp pu)
     {
         if (!spawnedPowerUps.Contains(pu))
-        {
             spawnedPowerUps.Add(pu);
-        }
     }
 
     private IEnumerator ResetSequence()
@@ -258,6 +267,12 @@ public class GameManager : MonoBehaviour
         isMoving = true;
 
         yield return new WaitForSeconds(1f);
+
+        foreach (var p in players)
+        {
+            if (p != null)
+                p.ResetProperties();
+        }
 
         spawnedPowerUps.Clear();
 
@@ -269,32 +284,27 @@ public class GameManager : MonoBehaviour
         InitializePlayers();
 
         currentPlayerIndex = 0;
+        movesRemaining = 0;
         isMoving = false;
     }
 
-    private void SetPlayerBool(PlayerMarker player, string paramName, bool state)
+    private void SetPlayerBool(PlayerMarker player, string param, bool state)
     {
         Animator anim = player.GetComponentInChildren<Animator>();
 
         if (anim != null)
-        {
-            anim.SetBool(paramName, state);
-        }
+            anim.SetBool(param, state);
     }
 
     private void InitializePlayers()
     {
         players.Clear();
-
-        PlayerMarker[] foundPlayers = FindObjectsOfType<PlayerMarker>();
-        players.AddRange(foundPlayers);
+        players.AddRange(FindObjectsOfType<PlayerMarker>());
 
         enemy = FindObjectOfType<EnemyAI>();
 
         if (players.Count > 0)
-        {
             UpdateTurnIndicator();
-        }
     }
 
     private void NextTurn()
@@ -302,70 +312,102 @@ public class GameManager : MonoBehaviour
         currentPlayerIndex++;
 
         if (currentPlayerIndex >= players.Count)
-        {
             StartCoroutine(EnemyTurnRoutine());
-        }
         else
-        {
             UpdateTurnIndicator();
+    }
+
+private IEnumerator EnemyTurnRoutine()
+{
+    isMoving = true;
+
+    // 1. Játékos highlight lekapcsolása, ellenségé bekapcsolása (pl. pirosas)
+    HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
+
+    // Várjunk egy kicsit, hogy látszódjon, az ellenség jön
+    yield return new WaitForSeconds(0.5f);
+
+    yield return StartCoroutine(
+        enemy.TakeTurnCoroutine(players, mazeGenerator.GetCells())
+    );
+
+    // Frissítjük a highlightot az ellenség ÚJ pozíciójára a mozgás után
+    HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
+    yield return new WaitForSeconds(0.3f);
+
+    currentPlayerIndex = 0;
+    isMoving = false;
+
+    if (!CheckGameOver())
+        UpdateTurnIndicator(); // Ez majd visszaugrik az 1. játékosra
+}
+
+    private void HighlightCell(Vector2Int gridPos, Color color, bool state)
+{
+    // Előző kiemelés törlése, ha létezik
+    if (!state && lastHighlightedCell.x != -1)
+    {
+        var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
+        if (oldCell != null) oldCell.SetHighlight(false, Color.white);
+        return;
+    }
+
+    // Új kiemelés bekapcsolása
+    if (state)
+    {
+        // Ha volt előző, azt előbb lekapcsoljuk
+        HighlightCell(Vector2Int.zero, Color.white, false); 
+
+        lastHighlightedCell = gridPos;
+        var currentCell = mazeGenerator.GetCells()[gridPos.x, gridPos.y];
+        if (currentCell != null)
+        {
+            currentCell.SetHighlight(true, color);
         }
     }
+}
 
-    private IEnumerator EnemyTurnRoutine()
-    {
-        isMoving = true;
-
-        yield return StartCoroutine(
-            enemy.TakeTurnCoroutine(players, mazeGenerator.GetCells())
-        );
-
-        currentPlayerIndex = 0;
-        isMoving = false;
-
-        if (CheckGameOver()) yield break;
-
-        UpdateTurnIndicator();
-    }
-
+private Vector2Int lastHighlightedCell = new Vector2Int(-1, -1);
     private void UpdateTurnIndicator()
     {
-        ResetAllPlayersAnimation();
+ResetAllPlayersAnimation();
 
-        if (players.Count > 0 && currentPlayerIndex < players.Count)
+    if (players.Count > 0 && currentPlayerIndex < players.Count)
+    {
+        PlayerMarker p = players[currentPlayerIndex];
+
+        // 1. ELŐZŐ CELLA VISSZAÁLLÍTÁSA
+        if (lastHighlightedCell.x != -1)
         {
-            PlayerMarker currentPlayer = players[currentPlayerIndex];
+            var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
+            if (oldCell != null)
+            {
+                // Itt a második paraméternek nincs hatása a MazeCell-ben lévő if-else miatt
+                oldCell.SetHighlight(false, Color.white); 
+            }
+        }
+        // 2. ÚJ CELLA KIEMELÉSE
+        lastHighlightedCell = p.GridPos;
+        var currentCell = mazeGenerator.GetCells()[p.GridPos.x, p.GridPos.y];
+        if (currentCell != null)
+        {
+            currentCell.SetHighlight(true, new Color(1f, 0.9f, 0.5f)); // Pl. halványsárga kiemelés
+        }
+        HighlightCell(p.GridPos, new Color(1f, 0.9f, 0.5f), true);
 
             if (movesRemaining <= 0)
-            {
-                movesRemaining = currentPlayer.StepRange;
-            }
+                movesRemaining = p.StepRange;
 
-            SetPlayerBool(currentPlayer, "isAlerted", true);
-
-            if (currentIndicator != null)
-                Destroy(currentIndicator);
-
-            if (indicatorPrefab != null)
-            {
-                Vector3 spawnPos = currentPlayer.transform.position + indicatorOffset;
-
-                currentIndicator = Instantiate(
-                    indicatorPrefab,
-                    spawnPos,
-                    Quaternion.identity
-                );
-
-                currentIndicator.transform.SetParent(currentPlayer.transform);
-            }
+            SetPlayerBool(p, "isAlerted", true);
         }
     }
 
     private void ResetAllPlayersAnimation()
     {
-        foreach (var player in players)
+        foreach (var p in players)
         {
-            SetPlayerBool(player, "isAlerted", false);
-            SetPlayerBool(player, "isRunning", false);
+            SetPlayerBool(p, "isAlerted", false);
+            SetPlayerBool(p, "isRunning", false);
         }
     }
 }

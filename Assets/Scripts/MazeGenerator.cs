@@ -107,28 +107,31 @@ public class MazeGenerator : MonoBehaviour
         }
     }
 
-    void CreateGrid()
+void CreateGrid()
+{
+    cells = new MazeCell[mazeWidth, mazeHeight];
+    Vector3 offset = new Vector3(8.8f, 0f, 1f);
+
+    for (int x = 0; x < mazeWidth; x++)
     {
-        cells = new MazeCell[mazeWidth, mazeHeight];
-
-        Vector3 offset = new Vector3(8.8f, 0f, 1f);
-
-        for (int x = 0; x < mazeWidth; x++)
+        for (int y = 0; y < mazeHeight; y++)
         {
-            for (int y = 0; y < mazeHeight; y++)
-            {
-                Vector3 pos = new Vector3(x * cellSize, 0, y * cellSize) + offset;
+            Vector3 pos = new Vector3(x * cellSize, 0, y * cellSize) + offset;
+            int randomIndex = Random.Range(0, CellPrefabs.Count);
+            GameObject cellObj = Instantiate(CellPrefabs[randomIndex], pos, Quaternion.identity, transform);
+            
+            MazeCell cell = cellObj.GetComponent<MazeCell>();
+            cells[x, y] = cell;
 
-                int randomIndex = Random.Range(0, CellPrefabs.Count);
-                GameObject randomPrefab = CellPrefabs[randomIndex];
-
-                GameObject cellObj = Instantiate(randomPrefab, pos, Quaternion.identity, transform);
-                cellObj.name = $"Cell_{x}_{y}";
-
-                cells[x, y] = cellObj.GetComponent<MazeCell>();
-            }
+            // Sakktábla logika
+            bool isDark = (x + y) % 2 == 0;
+            // Ne legyen túl sötét, hogy látszódjon a textúra (pl. 0.6f)
+            Color gridColor = isDark ? new Color(0.6f, 0.6f, 0.6f, 1f) : Color.white;
+            
+            cell.SetBaseColor(gridColor);
         }
     }
+}
 
     void SpawnPlayersInCorners()
     {
