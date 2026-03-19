@@ -22,6 +22,9 @@ public class GameManager : MonoBehaviour
     private bool isMoving = false;
 
     private EnemyAI enemy;
+    private Vector2Int lastHighlightedCell = new(-1, -1);
+
+    [SerializeField] private CameraFollow cameraFollow;
 
     private void Awake()
     {
@@ -30,6 +33,9 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        if (cameraFollow == null)
+            cameraFollow = Camera.main.GetComponent<CameraFollow>();
+        
         Invoke(nameof(InitializePlayers), 0.2f);
     }
 
@@ -52,7 +58,7 @@ public class GameManager : MonoBehaviour
             foreach (var r in renderers)
                 r.material.color = ghostColor;
 
-            yield return new WaitForSeconds(0.8f);
+            yield return new WaitForSeconds(1f);
 
             foreach (var r in renderers)
                 r.material.color = originalColor;
@@ -180,6 +186,7 @@ public class GameManager : MonoBehaviour
         CheckForPowerUp(player);
 
         isMoving = false;
+        yield return new WaitForSeconds(1f);
 
         if (CheckGameOver())
             yield break;
@@ -222,7 +229,6 @@ public class GameManager : MonoBehaviour
         if (playerAnim != null)
             playerAnim.SetTrigger("attack");
 
-        yield return new WaitForSeconds(0.2f);
 
         if (enemyAnim != null)
             enemyAnim.SetTrigger("die");
@@ -268,24 +274,37 @@ public class GameManager : MonoBehaviour
 
         yield return new WaitForSeconds(1f);
 
-        foreach (var p in players)
-        {
-            if (p != null)
-                p.ResetProperties();
-        }
-
         spawnedPowerUps.Clear();
+        players.Clear();
 
         mazeGenerator.GenerateNewLevel();
 
         yield return new WaitForEndOfFrame();
 
-        players.Clear();
         InitializePlayers();
 
         currentPlayerIndex = 0;
         movesRemaining = 0;
         isMoving = false;
+    }
+
+    private void InitializePlayers()
+    {
+        players.Clear();
+
+        var foundPlayers = new List<PlayerMarker>(FindObjectsOfType<PlayerMarker>());
+        foundPlayers.Sort((a, b) => string.Compare(a.name, b.name));
+
+        players.AddRange(foundPlayers);
+
+        enemy = FindObjectOfType<EnemyAI>();
+
+        if (players.Count > 0)
+        {
+            currentPlayerIndex = 0;
+            movesRemaining = players[0].StepRange;
+            UpdateTurnIndicator();
+        }
     }
 
     private void SetPlayerBool(PlayerMarker player, string param, bool state)
@@ -294,17 +313,6 @@ public class GameManager : MonoBehaviour
 
         if (anim != null)
             anim.SetBool(param, state);
-    }
-
-    private void InitializePlayers()
-    {
-        players.Clear();
-        players.AddRange(FindObjectsOfType<PlayerMarker>());
-
-        enemy = FindObjectOfType<EnemyAI>();
-
-        if (players.Count > 0)
-            UpdateTurnIndicator();
     }
 
     private void NextTurn()
@@ -317,83 +325,81 @@ public class GameManager : MonoBehaviour
             UpdateTurnIndicator();
     }
 
-private IEnumerator EnemyTurnRoutine()
-{
-    isMoving = true;
+    private IEnumerator EnemyTurnRoutine()
+    {
+        isMoving = true;
 
-    // 1. Játékos highlight lekapcsolása, ellenségé bekapcsolása (pl. pirosas)
-    HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
+        if (cameraFollow != null) cameraFollow.SetTarget(enemy.transform);
 
-    // Várjunk egy kicsit, hogy látszódjon, az ellenség jön
-    yield return new WaitForSeconds(0.5f);
+        HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
 
-    yield return StartCoroutine(
-        enemy.TakeTurnCoroutine(players, mazeGenerator.GetCells())
-    );
+        yield return new WaitForSeconds(2f);
 
-    // Frissítjük a highlightot az ellenség ÚJ pozíciójára a mozgás után
-    HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
-    yield return new WaitForSeconds(0.3f);
+        yield return StartCoroutine(
+            enemy.TakeTurnCoroutine(players, mazeGenerator.GetCells())
+        );
 
-    currentPlayerIndex = 0;
-    isMoving = false;
+        HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
 
-    if (!CheckGameOver())
-        UpdateTurnIndicator(); // Ez majd visszaugrik az 1. játékosra
-}
+        yield return new WaitForSeconds(2f);
+
+        currentPlayerIndex = 0;
+        isMoving = false;
+
+        if (!CheckGameOver())
+            UpdateTurnIndicator();
+    }
 
     private void HighlightCell(Vector2Int gridPos, Color color, bool state)
-{
-    // Előző kiemelés törlése, ha létezik
-    if (!state && lastHighlightedCell.x != -1)
     {
-        var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
-        if (oldCell != null) oldCell.SetHighlight(false, Color.white);
-        return;
-    }
-
-    // Új kiemelés bekapcsolása
-    if (state)
-    {
-        // Ha volt előző, azt előbb lekapcsoljuk
-        HighlightCell(Vector2Int.zero, Color.white, false); 
-
-        lastHighlightedCell = gridPos;
-        var currentCell = mazeGenerator.GetCells()[gridPos.x, gridPos.y];
-        if (currentCell != null)
-        {
-            currentCell.SetHighlight(true, color);
-        }
-    }
-}
-
-private Vector2Int lastHighlightedCell = new Vector2Int(-1, -1);
-    private void UpdateTurnIndicator()
-    {
-ResetAllPlayersAnimation();
-
-    if (players.Count > 0 && currentPlayerIndex < players.Count)
-    {
-        PlayerMarker p = players[currentPlayerIndex];
-
-        // 1. ELŐZŐ CELLA VISSZAÁLLÍTÁSA
-        if (lastHighlightedCell.x != -1)
+        if (!state && lastHighlightedCell.x != -1)
         {
             var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
             if (oldCell != null)
-            {
-                // Itt a második paraméternek nincs hatása a MazeCell-ben lévő if-else miatt
-                oldCell.SetHighlight(false, Color.white); 
-            }
+                oldCell.SetHighlight(false, Color.white);
+
+            return;
         }
-        // 2. ÚJ CELLA KIEMELÉSE
-        lastHighlightedCell = p.GridPos;
-        var currentCell = mazeGenerator.GetCells()[p.GridPos.x, p.GridPos.y];
-        if (currentCell != null)
+
+        if (state)
         {
-            currentCell.SetHighlight(true, new Color(1f, 0.9f, 0.5f)); // Pl. halványsárga kiemelés
+            HighlightCell(Vector2Int.zero, Color.white, false);
+
+            lastHighlightedCell = gridPos;
+
+            var currentCell = mazeGenerator.GetCells()[gridPos.x, gridPos.y];
+
+            if (currentCell != null)
+                currentCell.SetHighlight(true, color);
         }
-        HighlightCell(p.GridPos, new Color(1f, 0.9f, 0.5f), true);
+    }
+
+    private void UpdateTurnIndicator()
+    {
+        ResetAllPlayersAnimation();
+
+        if (players.Count > 0 && currentPlayerIndex < players.Count)
+        {
+            PlayerMarker p = players[currentPlayerIndex];
+
+            if (cameraFollow != null) cameraFollow.SetTarget(p.transform);
+
+            if (lastHighlightedCell.x != -1)
+            {
+                var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
+
+                if (oldCell != null)
+                    oldCell.SetHighlight(false, Color.white);
+            }
+
+            lastHighlightedCell = p.GridPos;
+
+            var currentCell = mazeGenerator.GetCells()[p.GridPos.x, p.GridPos.y];
+
+            if (currentCell != null)
+                currentCell.SetHighlight(true, Color.yellow);
+
+            HighlightCell(p.GridPos, Color.yellow, true);
 
             if (movesRemaining <= 0)
                 movesRemaining = p.StepRange;
