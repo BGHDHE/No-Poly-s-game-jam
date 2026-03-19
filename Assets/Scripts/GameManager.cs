@@ -9,14 +9,22 @@ public class GameManager : MonoBehaviour
     [SerializeField] private MazeGenerator mazeGenerator;
     [SerializeField] private float moveSpeed;
 
-    [SerializeField] private GameObject indicatorPrefab;
-    [SerializeField] private Vector3 indicatorOffset = new Vector3(0f, 0f, 0f);
+    [SerializeField] private GameObject ghostAuraPersistentPrefab;
+    [SerializeField] private GameObject ghostBurstActionPrefab;
+    [SerializeField] private GameObject rangeParticlePrefab;
+    [SerializeField] private float gameOverAnimationDelay = 2.0f;
 
-    private List<PlayerMarker> players = new List<PlayerMarker>();
+    private List<PlayerMarker> players = new();
+    private List<PowerUp> spawnedPowerUps = new();
+
     private int currentPlayerIndex = 0;
+    private int movesRemaining = 0;
     private bool isMoving = false;
+
     private EnemyAI enemy;
-    private GameObject currentIndicator;
+    private Vector2Int lastHighlightedCell = new(-1, -1);
+
+    [SerializeField] private CameraFollow cameraFollow;
 
     private void Awake()
     {
@@ -25,18 +33,179 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        if (cameraFollow == null)
+            cameraFollow = Camera.main.GetComponent<CameraFollow>();
+        
         Invoke(nameof(InitializePlayers), 0.2f);
+    }
+
+    private IEnumerator GhostEffectRoutine(PlayerMarker player)
+    {
+        if (ghostBurstActionPrefab != null)
+        {
+            GameObject burst = Instantiate(ghostBurstActionPrefab, player.transform.position, Quaternion.identity);
+            burst.transform.SetParent(player.transform);
+            Destroy(burst, 2f);
+        }
+
+        Renderer[] renderers = player.GetComponentsInChildren<Renderer>();
+
+        if (renderers.Length > 0)
+        {
+            Color originalColor = renderers[0].material.color;
+            Color ghostColor = new(originalColor.r, originalColor.g, originalColor.b, 0.4f);
+
+            foreach (var r in renderers)
+                r.material.color = ghostColor;
+
+            yield return new WaitForSeconds(1f);
+
+            foreach (var r in renderers)
+                r.material.color = originalColor;
+        }
+    }
+
+    private void TryMoveCurrentPlayer(Vector2Int direction)
+    {
+        PlayerMarker player = players[currentPlayerIndex];
+        Vector2Int targetGridPos = player.GridPos + direction;
+
+        if (targetGridPos.x < 0 || targetGridPos.x >= mazeGenerator.mazeWidth ||
+            targetGridPos.y < 0 || targetGridPos.y >= mazeGenerator.mazeHeight)
+            return;
+
+        MazeCell currentCell = mazeGenerator.GetCells()[player.GridPos.x, player.GridPos.y];
+
+        bool canMoveNormal =
+            (direction == Vector2Int.up && currentCell.IsNorthOpen) ||
+            (direction == Vector2Int.down && currentCell.IsSouthOpen) ||
+            (direction == Vector2Int.right && currentCell.IsEastOpen) ||
+            (direction == Vector2Int.left && currentCell.IsWestOpen);
+
+        if (canMoveNormal)
+        {
+            movesRemaining--;
+            StartCoroutine(MoveRoutine(player, targetGridPos));
+        }
+        else if (player.GhostCharges > 0)
+        {
+            player.GhostCharges--;
+            movesRemaining--;
+
+            StartCoroutine(GhostEffectRoutine(player));
+
+            if (player.GhostCharges <= 0 && player.activePersistentGhostEffect != null)
+            {
+                var ps = player.activePersistentGhostEffect.GetComponent<ParticleSystem>();
+                if (ps != null) ps.Stop();
+
+                Destroy(player.activePersistentGhostEffect, 2f);
+                player.activePersistentGhostEffect = null;
+            }
+
+            StartCoroutine(MoveRoutine(player, targetGridPos));
+        }
+    }
+
+    private void CheckForPowerUp(PlayerMarker player)
+    {
+        PowerUp found = spawnedPowerUps.Find(p => p.GridPos == player.GridPos);
+        if (found == null) return;
+
+        if (found.type == PowerUpType.Ghost)
+        {
+            player.GhostCharges += 2;
+
+            if (player.activePersistentGhostEffect == null && ghostAuraPersistentPrefab != null)
+            {
+                player.activePersistentGhostEffect = Instantiate(
+                    ghostAuraPersistentPrefab,
+                    player.transform.position,
+                    Quaternion.identity);
+
+                player.activePersistentGhostEffect.transform.SetParent(player.transform);
+            }
+        }
+        else if (found.type == PowerUpType.Range)
+        {
+            player.StepRange *= 2;
+
+            if (rangeParticlePrefab != null)
+            {
+                GameObject effect = Instantiate(
+                    rangeParticlePrefab,
+                    player.transform.position,
+                    player.transform.rotation);
+
+                effect.transform.SetParent(player.transform);
+            }
+        }
+
+        spawnedPowerUps.Remove(found);
+        found.Collect();
+    }
+
+    private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
+    {
+        isMoving = true;
+        player.GridPos = targetGridPos;
+
+        float cellSize = 18f;
+
+        Vector3 targetWorldPos = new(
+            targetGridPos.x * cellSize + cellSize / 2f,
+            player.transform.position.y,
+            targetGridPos.y * cellSize + cellSize / 2f
+        );
+
+        SetPlayerBool(player, "isRunning", true);
+
+        while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
+        {
+            Vector3 dir = (targetWorldPos - player.transform.position).normalized;
+
+            if (dir != Vector3.zero)
+            {
+                player.transform.rotation = Quaternion.Slerp(
+                    player.transform.rotation,
+                    Quaternion.LookRotation(dir),
+                    Time.deltaTime * 15f);
+            }
+
+            player.transform.position = Vector3.MoveTowards(
+                player.transform.position,
+                targetWorldPos,
+                moveSpeed * Time.deltaTime);
+
+            yield return null;
+        }
+
+        player.transform.position = targetWorldPos;
+
+        SetPlayerBool(player, "isRunning", false);
+        CheckForPowerUp(player);
+
+        isMoving = false;
+        yield return new WaitForSeconds(1f);
+
+        if (CheckGameOver())
+            yield break;
+
+        if (movesRemaining > 0)
+            UpdateTurnIndicator();
+        else
+            NextTurn();
     }
 
     private bool CheckGameOver()
     {
         if (enemy == null) return false;
 
-        foreach (var player in players)
+        foreach (var p in players)
         {
-            if (player.GridPos == enemy.GridPos)
+            if (p.GridPos == enemy.GridPos)
             {
-                StartCoroutine(ResetSequence());
+                StartCoroutine(GameOverAnimationRoutine(p, enemy));
                 return true;
             }
         }
@@ -44,21 +213,29 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    private IEnumerator ResetSequence()
+    private IEnumerator GameOverAnimationRoutine(PlayerMarker winnerPlayer, EnemyAI loserEnemy)
     {
         isMoving = true;
 
-        yield return new WaitForSeconds(1f);
+        Vector3 playerPos = winnerPlayer.transform.position;
+        Vector3 enemyPos = loserEnemy.transform.position;
 
-        mazeGenerator.GenerateNewLevel();
+        winnerPlayer.transform.LookAt(new Vector3(enemyPos.x, playerPos.y, enemyPos.z));
+        loserEnemy.transform.LookAt(new Vector3(playerPos.x, enemyPos.y, playerPos.z));
 
-        yield return new WaitForEndOfFrame();
+        Animator playerAnim = winnerPlayer.GetComponentInChildren<Animator>();
+        Animator enemyAnim = loserEnemy.GetComponentInChildren<Animator>();
 
-        players.Clear();
-        InitializePlayers();
+        if (playerAnim != null)
+            playerAnim.SetTrigger("attack");
 
-        currentPlayerIndex = 0;
-        isMoving = false;
+
+        if (enemyAnim != null)
+            enemyAnim.SetTrigger("die");
+
+        yield return new WaitForSeconds(gameOverAnimationDelay);
+
+        StartCoroutine(ResetSequence());
     }
 
     public void HandleMoveInput(Vector2 input)
@@ -67,116 +244,75 @@ public class GameManager : MonoBehaviour
 
         Vector2Int moveDir = Vector2Int.zero;
 
-        if (input.y > 0.5f) moveDir = new Vector2Int(0, 1);
-        else if (input.y < -0.5f) moveDir = new Vector2Int(0, -1);
-        else if (input.x > 0.5f) moveDir = new Vector2Int(1, 0);
-        else if (input.x < -0.5f) moveDir = new Vector2Int(-1, 0);
+        if (input.y > 0.5f) moveDir = Vector2Int.up;
+        else if (input.y < -0.5f) moveDir = Vector2Int.down;
+        else if (input.x > 0.5f) moveDir = Vector2Int.right;
+        else if (input.x < -0.5f) moveDir = Vector2Int.left;
 
         if (moveDir != Vector2Int.zero)
-        {
             TryMoveCurrentPlayer(moveDir);
-        }
     }
 
     public void HandleSkipInput()
     {
-        if (isMoving) return;
-        NextTurn();
-    }
-
-    private void TryMoveCurrentPlayer(Vector2Int direction)
-    {
-        PlayerMarker player = players[currentPlayerIndex];
-        Vector2Int currentGridPos = player.GridPos;
-        Vector2Int targetGridPos = currentGridPos + direction;
-
-        if (targetGridPos.x < 0 || targetGridPos.x >= mazeGenerator.mazeWidth ||
-            targetGridPos.y < 0 || targetGridPos.y >= mazeGenerator.mazeHeight)
+        if (!isMoving)
         {
-            return;
-        }
-
-        MazeCell currentCell = mazeGenerator.GetCells()[currentGridPos.x, currentGridPos.y];
-        bool canMove = false;
-
-        if (direction == Vector2Int.up && currentCell.IsNorthOpen) canMove = true;
-        if (direction == Vector2Int.down && currentCell.IsSouthOpen) canMove = true;
-        if (direction == Vector2Int.right && currentCell.IsEastOpen) canMove = true;
-        if (direction == Vector2Int.left && currentCell.IsWestOpen) canMove = true;
-
-        if (canMove)
-        {
-            StartCoroutine(MoveRoutine(player, targetGridPos));
+            movesRemaining = 0;
+            NextTurn();
         }
     }
 
-private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
-{
-    isMoving = true;
-
-    player.GridPos = targetGridPos;
-
-    float cellSize = 18f;
-    Vector3 offset = new Vector3(0f, 0f, 0f);
-    Vector3 targetWorldPos = new Vector3(
-        targetGridPos.x * cellSize + (cellSize / 2f),
-        player.transform.position.y,
-        targetGridPos.y * cellSize + (cellSize / 2f)
-    );
-
-    SetPlayerBool(player, "isAlerted", false);
-    SetPlayerBool(player, "isRunning", true);
-
-    while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
+    public void RegisterPowerUp(PowerUp pu)
     {
-        Vector3 direction = (targetWorldPos - player.transform.position).normalized;
-        if (direction != Vector3.zero)
-        {
-            Quaternion lookRotation = Quaternion.LookRotation(direction);
-            player.transform.rotation = Quaternion.Slerp(player.transform.rotation, lookRotation, Time.deltaTime * 30f);
-        }
-
-        player.transform.position = Vector3.MoveTowards(
-            player.transform.position,
-            targetWorldPos,
-            moveSpeed * Time.deltaTime
-        );
-        yield return null;
+        if (!spawnedPowerUps.Contains(pu))
+            spawnedPowerUps.Add(pu);
     }
 
-    player.transform.position = targetWorldPos;
-
-    SetPlayerBool(player, "isRunning", false);
-    
-    isMoving = false;
-
-    if (CheckGameOver()) yield break;
-
-    NextTurn();
-}
-
-    private void SetPlayerBool(PlayerMarker player, string paramName, bool state)
+    private IEnumerator ResetSequence()
     {
-        Animator anim = player.GetComponentInChildren<Animator>();
-        if (anim != null)
-        {
-            anim.SetBool(paramName, state);
-        }
+        isMoving = true;
+
+        yield return new WaitForSeconds(1f);
+
+        spawnedPowerUps.Clear();
+        players.Clear();
+
+        mazeGenerator.GenerateNewLevel();
+
+        yield return new WaitForEndOfFrame();
+
+        InitializePlayers();
+
+        currentPlayerIndex = 0;
+        movesRemaining = 0;
+        isMoving = false;
     }
 
     private void InitializePlayers()
     {
         players.Clear();
 
-        PlayerMarker[] foundPlayers = FindObjectsOfType<PlayerMarker>();
+        var foundPlayers = new List<PlayerMarker>(FindObjectsOfType<PlayerMarker>());
+        foundPlayers.Sort((a, b) => string.Compare(a.name, b.name));
+
         players.AddRange(foundPlayers);
 
         enemy = FindObjectOfType<EnemyAI>();
 
         if (players.Count > 0)
         {
+            currentPlayerIndex = 0;
+            movesRemaining = players[0].StepRange;
             UpdateTurnIndicator();
         }
+    }
+
+    private void SetPlayerBool(PlayerMarker player, string param, bool state)
+    {
+        Animator anim = player.GetComponentInChildren<Animator>();
+
+        if (anim != null)
+            anim.SetBool(param, state);
     }
 
     private void NextTurn()
@@ -184,57 +320,100 @@ private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
         currentPlayerIndex++;
 
         if (currentPlayerIndex >= players.Count)
-        {
             StartCoroutine(EnemyTurnRoutine());
-        }
         else
-        {
             UpdateTurnIndicator();
-        }
     }
 
     private IEnumerator EnemyTurnRoutine()
     {
         isMoving = true;
 
+        if (cameraFollow != null) cameraFollow.SetTarget(enemy.transform);
+
+        HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
+
+        yield return new WaitForSeconds(2f);
+
         yield return StartCoroutine(
             enemy.TakeTurnCoroutine(players, mazeGenerator.GetCells())
         );
 
+        HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
+
+        yield return new WaitForSeconds(2f);
+
         currentPlayerIndex = 0;
         isMoving = false;
 
-        if (CheckGameOver()) yield break;
-
-        UpdateTurnIndicator();
+        if (!CheckGameOver())
+            UpdateTurnIndicator();
     }
 
-private void UpdateTurnIndicator()
-{
-    ResetAllPlayersAnimation();
-
-    if (players.Count > 0 && currentPlayerIndex < players.Count)
+    private void HighlightCell(Vector2Int gridPos, Color color, bool state)
     {
-        PlayerMarker currentPlayer = players[currentPlayerIndex];
-
-        SetPlayerBool(currentPlayer, "isAlerted", true);
-
-        if (currentIndicator != null) Destroy(currentIndicator);
-        if (indicatorPrefab != null)
+        if (!state && lastHighlightedCell.x != -1)
         {
-            Vector3 spawnPos = currentPlayer.transform.position + indicatorOffset;
-            currentIndicator = Instantiate(indicatorPrefab, spawnPos, Quaternion.identity);
-            currentIndicator.transform.SetParent(currentPlayer.transform);
+            var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
+            if (oldCell != null)
+                oldCell.SetHighlight(false, Color.white);
+
+            return;
+        }
+
+        if (state)
+        {
+            HighlightCell(Vector2Int.zero, Color.white, false);
+
+            lastHighlightedCell = gridPos;
+
+            var currentCell = mazeGenerator.GetCells()[gridPos.x, gridPos.y];
+
+            if (currentCell != null)
+                currentCell.SetHighlight(true, color);
         }
     }
-}
 
-private void ResetAllPlayersAnimation()
-{
-    foreach (var player in players)
+    private void UpdateTurnIndicator()
     {
-        SetPlayerBool(player, "isAlerted", false);
-        SetPlayerBool(player, "isRunning", false);
+        ResetAllPlayersAnimation();
+
+        if (players.Count > 0 && currentPlayerIndex < players.Count)
+        {
+            PlayerMarker p = players[currentPlayerIndex];
+
+            if (cameraFollow != null) cameraFollow.SetTarget(p.transform);
+
+            if (lastHighlightedCell.x != -1)
+            {
+                var oldCell = mazeGenerator.GetCells()[lastHighlightedCell.x, lastHighlightedCell.y];
+
+                if (oldCell != null)
+                    oldCell.SetHighlight(false, Color.white);
+            }
+
+            lastHighlightedCell = p.GridPos;
+
+            var currentCell = mazeGenerator.GetCells()[p.GridPos.x, p.GridPos.y];
+
+            if (currentCell != null)
+                currentCell.SetHighlight(true, Color.yellow);
+
+            HighlightCell(p.GridPos, Color.yellow, true);
+
+            if (movesRemaining <= 0)
+                movesRemaining = p.StepRange;
+
+            SetPlayerBool(p, "isAlerted", true);
+        }
     }
-}
+
+    private void ResetAllPlayersAnimation()
+    {
+        foreach (var p in players)
+        {
+            SetPlayerBool(p, "isAlerted", false);
+            SetPlayerBool(p, "isRunning", false);
+        }
+    }
 }

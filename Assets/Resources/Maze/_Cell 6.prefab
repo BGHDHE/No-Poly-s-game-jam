@@ -53,6 +53,7 @@ MonoBehaviour:
   wallEast: {fileID: 8899308683418298261}
   wallSouth: {fileID: 1819998391653951978}
   wallWest: {fileID: 9221954871220689763}
+  floorRenderer: {fileID: 4735286183568554974}
 --- !u!1001 &5708641961245867
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -127,6 +128,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a720f4638b52956afaa40be64290c9f6, type: 3}
+--- !u!23 &4735286183568554974 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 4729723302331074421, guid: a720f4638b52956afaa40be64290c9f6, type: 3}
+  m_PrefabInstance: {fileID: 5708641961245867}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &6606791788723379928 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6603488554207994483, guid: a720f4638b52956afaa40be64290c9f6, type: 3}
