@@ -37,22 +37,29 @@ public class MazeGenerator : MonoBehaviour
         GenerateDFS();
     }
 
-    public void ClearMaze()
-    {
-        foreach (Transform child in transform)
-            Destroy(child.gameObject);
+public void ClearMaze()
+{
+    // 1. Labirintus elemek (falak, padló) törlése
+    foreach (Transform child in transform)
+        Destroy(child.gameObject);
 
-        PlayerMarker[] existingPlayers = FindObjectsOfType<PlayerMarker>();
-        foreach (var p in existingPlayers)
-            Destroy(p.gameObject);
+    // 2. Játékosok törlése
+    PlayerMarker[] existingPlayers = FindObjectsOfType<PlayerMarker>();
+    foreach (var p in existingPlayers)
+        Destroy(p.gameObject);
 
-        EnemyAI existingEnemy = FindObjectOfType<EnemyAI>();
-        if (existingEnemy != null)
-            Destroy(existingEnemy.gameObject);
+    // 3. Ellenség törlése
+    EnemyAI existingEnemy = FindObjectOfType<EnemyAI>();
+    if (existingEnemy != null)
+        Destroy(existingEnemy.gameObject);
 
-        cells = null;
-    }
+    // --- EZ HIÁNYZOTT: PowerUp-ok törlése ---
+    PowerUp[] existingPowerUps = FindObjectsOfType<PowerUp>();
+    foreach (var pu in existingPowerUps)
+        Destroy(pu.gameObject);
 
+    cells = null;
+}
     public void GenerateNewLevel()
     {
         ClearMaze();
@@ -138,7 +145,7 @@ public class MazeGenerator : MonoBehaviour
                 cells[x, y] = cell;
 
                 bool isDark = (x + y) % 2 == 0;
-                Color gridColor = isDark ? Color.rosyBrown : Color.white;
+                Color gridColor = isDark ? Color.dimGray : Color.white;
 
                 cell.SetBaseColor(gridColor);
             }

@@ -14,6 +14,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject rangeParticlePrefab;
     [SerializeField] private float gameOverAnimationDelay = 2.0f;
 
+    [SerializeField] private CameraFollow cameraFollow;
+
     private List<PlayerMarker> players = new();
     private List<PowerUp> spawnedPowerUps = new();
 
@@ -24,8 +26,6 @@ public class GameManager : MonoBehaviour
     private EnemyAI enemy;
     private Vector2Int lastHighlightedCell = new(-1, -1);
 
-    [SerializeField] private CameraFollow cameraFollow;
-
     private void Awake()
     {
         Instance = this;
@@ -35,7 +35,7 @@ public class GameManager : MonoBehaviour
     {
         if (cameraFollow == null)
             cameraFollow = Camera.main.GetComponent<CameraFollow>();
-        
+
         Invoke(nameof(InitializePlayers), 0.2f);
     }
 
@@ -65,8 +65,27 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    public void HandleMoveInput(Vector2 input)
+    {
+        if (isMoving || players.Count == 0 || movesRemaining <= 0)
+            return;
+
+        Vector2Int moveDir = Vector2Int.zero;
+
+        if (input.y > 0.5f) moveDir = Vector2Int.up;
+        else if (input.y < -0.5f) moveDir = Vector2Int.down;
+        else if (input.x > 0.5f) moveDir = Vector2Int.right;
+        else if (input.x < -0.5f) moveDir = Vector2Int.left;
+
+        if (moveDir != Vector2Int.zero)
+            TryMoveCurrentPlayer(moveDir);
+    }
+
     private void TryMoveCurrentPlayer(Vector2Int direction)
     {
+        if (isMoving)
+            return;
+
         PlayerMarker player = players[currentPlayerIndex];
         Vector2Int targetGridPos = player.GridPos + direction;
 
@@ -85,6 +104,7 @@ public class GameManager : MonoBehaviour
         if (canMoveNormal)
         {
             movesRemaining--;
+            isMoving = true;
             StartCoroutine(MoveRoutine(player, targetGridPos));
         }
         else if (player.GhostCharges > 0)
@@ -103,6 +123,7 @@ public class GameManager : MonoBehaviour
                 player.activePersistentGhostEffect = null;
             }
 
+            isMoving = true;
             StartCoroutine(MoveRoutine(player, targetGridPos));
         }
     }
@@ -146,56 +167,66 @@ public class GameManager : MonoBehaviour
     }
 
     private IEnumerator MoveRoutine(PlayerMarker player, Vector2Int targetGridPos)
+{
+    isMoving = true;
+    player.GridPos = targetGridPos;
+
+    float cellSize = 18f;
+    Vector3 targetWorldPos = new(
+        targetGridPos.x * cellSize + cellSize / 2f,
+        player.transform.position.y,
+        targetGridPos.y * cellSize + cellSize / 2f
+    );
+
+    SetPlayerBool(player, "isRunning", true);
+
+    // Mozgás animáció
+    while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
     {
-        isMoving = true;
-        player.GridPos = targetGridPos;
-
-        float cellSize = 18f;
-
-        Vector3 targetWorldPos = new(
-            targetGridPos.x * cellSize + cellSize / 2f,
-            player.transform.position.y,
-            targetGridPos.y * cellSize + cellSize / 2f
-        );
-
-        SetPlayerBool(player, "isRunning", true);
-
-        while (Vector3.Distance(player.transform.position, targetWorldPos) > 0.05f)
+        Vector3 dir = (targetWorldPos - player.transform.position).normalized;
+        if (dir != Vector3.zero)
         {
-            Vector3 dir = (targetWorldPos - player.transform.position).normalized;
-
-            if (dir != Vector3.zero)
-            {
-                player.transform.rotation = Quaternion.Slerp(
-                    player.transform.rotation,
-                    Quaternion.LookRotation(dir),
-                    Time.deltaTime * 15f);
-            }
-
-            player.transform.position = Vector3.MoveTowards(
-                player.transform.position,
-                targetWorldPos,
-                moveSpeed * Time.deltaTime);
-
-            yield return null;
+            player.transform.rotation = Quaternion.Slerp(
+                player.transform.rotation,
+                Quaternion.LookRotation(dir),
+                Time.deltaTime * 15f);
         }
 
-        player.transform.position = targetWorldPos;
+        player.transform.position = Vector3.MoveTowards(
+            player.transform.position,
+            targetWorldPos,
+            moveSpeed * Time.deltaTime);
 
-        SetPlayerBool(player, "isRunning", false);
-        CheckForPowerUp(player);
-
-        isMoving = false;
-        yield return new WaitForSeconds(1f);
-
-        if (CheckGameOver())
-            yield break;
-
-        if (movesRemaining > 0)
-            UpdateTurnIndicator();
-        else
-            NextTurn();
+        yield return null;
     }
+
+    player.transform.position = targetWorldPos;
+    SetPlayerBool(player, "isRunning", false);
+    
+    CheckForPowerUp(player);
+
+    // --- ITT A LÉNYEG ---
+    if (CheckGameOver())
+    {
+        isMoving = false; // Fontos, hogy ne ragadjon be
+        yield break;
+    }
+
+    if (movesRemaining > 0)
+    {
+        // Ha van még lépés, azonnal felszabadítjuk a mozgást
+        isMoving = false; 
+        UpdateTurnIndicator();
+    }
+    else
+    {
+        // Ha elfogyott a lépés, várunk egy kicsit a "drámai hatás" kedvéért,
+        // majd átadjuk a kört a következőnek.
+        yield return new WaitForSeconds(0.5f); 
+        isMoving = false;
+        NextTurn();
+    }
+}
 
     private bool CheckGameOver()
     {
@@ -229,28 +260,12 @@ public class GameManager : MonoBehaviour
         if (playerAnim != null)
             playerAnim.SetTrigger("attack");
 
-
         if (enemyAnim != null)
             enemyAnim.SetTrigger("die");
 
         yield return new WaitForSeconds(gameOverAnimationDelay);
 
         StartCoroutine(ResetSequence());
-    }
-
-    public void HandleMoveInput(Vector2 input)
-    {
-        if (isMoving || players.Count == 0) return;
-
-        Vector2Int moveDir = Vector2Int.zero;
-
-        if (input.y > 0.5f) moveDir = Vector2Int.up;
-        else if (input.y < -0.5f) moveDir = Vector2Int.down;
-        else if (input.x > 0.5f) moveDir = Vector2Int.right;
-        else if (input.x < -0.5f) moveDir = Vector2Int.left;
-
-        if (moveDir != Vector2Int.zero)
-            TryMoveCurrentPlayer(moveDir);
     }
 
     public void HandleSkipInput()
@@ -269,24 +284,25 @@ public class GameManager : MonoBehaviour
     }
 
     private IEnumerator ResetSequence()
-    {
-        isMoving = true;
+{
+    GameDirector.Instance.IncrementLevel();
+    isMoving = true;
 
-        yield return new WaitForSeconds(1f);
+    yield return new WaitForSeconds(1f);
 
-        spawnedPowerUps.Clear();
-        players.Clear();
+    spawnedPowerUps.Clear();
+    players.Clear();
 
-        mazeGenerator.GenerateNewLevel();
+    mazeGenerator.GenerateNewLevel();
 
-        yield return new WaitForEndOfFrame();
+    yield return new WaitForEndOfFrame();
 
-        InitializePlayers();
+    InitializePlayers();
 
-        currentPlayerIndex = 0;
-        movesRemaining = 0;
-        isMoving = false;
-    }
+    GameDirector.Instance.ResetGameTimers();
+
+    isMoving = false;
+}
 
     private void InitializePlayers()
     {
@@ -299,12 +315,12 @@ public class GameManager : MonoBehaviour
 
         enemy = FindObjectOfType<EnemyAI>();
 
-        if (players.Count > 0)
-        {
-            currentPlayerIndex = 0;
-            movesRemaining = players[0].StepRange;
-            UpdateTurnIndicator();
-        }
+if (players.Count > 0)
+    {
+        currentPlayerIndex = 0;
+        movesRemaining = players[0].StepRange; // Legyen explicit
+        UpdateTurnIndicator();
+    }
     }
 
     private void SetPlayerBool(PlayerMarker player, string param, bool state)
@@ -315,21 +331,26 @@ public class GameManager : MonoBehaviour
             anim.SetBool(param, state);
     }
 
-    private void NextTurn()
+private void NextTurn()
+{
+    currentPlayerIndex++;
+
+    if (currentPlayerIndex >= players.Count)
     {
-        currentPlayerIndex++;
-
-        if (currentPlayerIndex >= players.Count)
-            StartCoroutine(EnemyTurnRoutine());
-        else
-            UpdateTurnIndicator();
+        StartCoroutine(EnemyTurnRoutine());
     }
-
+    else
+    {
+        movesRemaining = players[currentPlayerIndex].StepRange; 
+        UpdateTurnIndicator();
+    }
+}
     private IEnumerator EnemyTurnRoutine()
     {
         isMoving = true;
 
-        if (cameraFollow != null) cameraFollow.SetTarget(enemy.transform);
+        if (cameraFollow != null)
+            cameraFollow.SetTarget(enemy.transform);
 
         HighlightCell(enemy.GridPos, new Color(1f, 0.4f, 0.4f), true);
 
@@ -343,11 +364,12 @@ public class GameManager : MonoBehaviour
 
         yield return new WaitForSeconds(2f);
 
-        currentPlayerIndex = 0;
-        isMoving = false;
+currentPlayerIndex = 0;
+movesRemaining = players[0].StepRange; // Az első játékos is kapja meg a lépéseit!
+isMoving = false;
 
-        if (!CheckGameOver())
-            UpdateTurnIndicator();
+if (!CheckGameOver())
+    UpdateTurnIndicator();
     }
 
     private void HighlightCell(Vector2Int gridPos, Color color, bool state)
@@ -382,7 +404,8 @@ public class GameManager : MonoBehaviour
         {
             PlayerMarker p = players[currentPlayerIndex];
 
-            if (cameraFollow != null) cameraFollow.SetTarget(p.transform);
+            if (cameraFollow != null)
+                cameraFollow.SetTarget(p.transform);
 
             if (lastHighlightedCell.x != -1)
             {
@@ -400,9 +423,6 @@ public class GameManager : MonoBehaviour
                 currentCell.SetHighlight(true, Color.yellow);
 
             HighlightCell(p.GridPos, Color.yellow, true);
-
-            if (movesRemaining <= 0)
-                movesRemaining = p.StepRange;
 
             SetPlayerBool(p, "isAlerted", true);
         }

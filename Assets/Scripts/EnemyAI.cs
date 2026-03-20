@@ -1,12 +1,12 @@
 using UnityEngine;
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
 
 public class EnemyAI : MonoBehaviour
 {
     public Vector2Int GridPos { get; set; }
 
-    private Vector2Int lastGridPos = new Vector2Int(-1, -1);
+    private Vector2Int lastGridPos = new(-1, -1);
     private float cellSize = 18f;
     private float moveSpeed = 9f;
     private Animator anim;
@@ -68,18 +68,15 @@ public class EnemyAI : MonoBehaviour
         }
 
         transform.position = targetWorldPos;
-        
+
         SetAnimBool("isRunning", false);
     }
 
     private void SetAnimBool(string paramName, bool state)
     {
         if (anim != null)
-        {
             anim.SetBool(paramName, state);
-        }
     }
-
 
     private void UpdateVisualImmediate()
     {
@@ -90,45 +87,87 @@ public class EnemyAI : MonoBehaviour
     {
         return new Vector3(
             gridPos.x * cellSize + (cellSize / 2f),
-            0f, 
+            0f,
             gridPos.y * cellSize + (cellSize / 2f)
         );
     }
 
-    private bool CanMoveInDirection(MazeCell cell, Vector2Int dir)
+    private bool CanMoveInDirection(Vector2Int currentPos, Vector2Int dir, MazeCell[,] maze)
     {
+        int w = maze.GetLength(0);
+        int h = maze.GetLength(1);
+
+        Vector2Int next = currentPos + dir;
+
+        if (next.x < 0 || next.y < 0 || next.x >= w || next.y >= h)
+            return false;
+
+        MazeCell cell = maze[currentPos.x, currentPos.y];
+
         if (dir == Vector2Int.up) return cell.IsNorthOpen;
         if (dir == Vector2Int.down) return cell.IsSouthOpen;
         if (dir == Vector2Int.right) return cell.IsEastOpen;
         if (dir == Vector2Int.left) return cell.IsWestOpen;
+
         return false;
     }
 
     private Vector2Int GetAggressiveEscapeMove(List<PlayerMarker> players, MazeCell[,] mazeCells)
     {
-        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.right, Vector2Int.left, Vector2Int.zero };
+        if (players == null || players.Count == 0)
+            return GridPos;
+
+        PlayerMarker closestPlayer = null;
+        float minDistance = float.MaxValue;
+
+        foreach (var p in players)
+        {
+            float dist = Vector2.Distance(GridPos, p.GridPos);
+
+            if (dist < minDistance)
+            {
+                minDistance = dist;
+                closestPlayer = p;
+            }
+        }
+
+        Vector2Int[] directions =
+        {
+            Vector2Int.up,
+            Vector2Int.down,
+            Vector2Int.right,
+            Vector2Int.left,
+            Vector2Int.zero
+        };
+
         Vector2Int bestMove = GridPos;
         float bestScore = float.MinValue;
 
-        MazeCell currentCell = mazeCells[GridPos.x, GridPos.y];
-
         foreach (var dir in directions)
         {
-            if (dir != Vector2Int.zero && !CanMoveInDirection(currentCell, dir)) continue;
+            if (dir != Vector2Int.zero && !CanMoveInDirection(GridPos, dir, mazeCells))
+                continue;
 
             Vector2Int target = GridPos + dir;
 
-            if (target.x < 0 || target.x >= mazeCells.GetLength(0) ||
-                target.y < 0 || target.y >= mazeCells.GetLength(1))
+            bool isPlayerOnTarget = false;
+
+            foreach (var p in players)
+            {
+                if (p.GridPos == target)
+                    isPlayerOnTarget = true;
+            }
+
+            if (isPlayerOnTarget)
                 continue;
 
-            bool isPlayerOnTarget = false;
-            foreach (var p in players) { if (p.GridPos == target) isPlayerOnTarget = true; }
-            if (isPlayerOnTarget) continue;
+            float score = Vector2.Distance(target, closestPlayer.GridPos) * 10f;
 
-            float score = EvaluatePosition(target, players, mazeCells);
-            if (target == lastGridPos) score -= 20f;
-            if (target == GridPos) score -= 10f;
+            int exits = GetExitCount(target, mazeCells);
+            score += exits * 5f;
+
+            if (target == lastGridPos) score -= 15f;
+            if (target == GridPos) score -= 5f;
 
             if (score > bestScore)
             {
@@ -136,29 +175,21 @@ public class EnemyAI : MonoBehaviour
                 bestMove = target;
             }
         }
+
         return bestMove;
     }
 
-    private float EvaluatePosition(Vector2Int pos, List<PlayerMarker> players, MazeCell[,] mazeCells)
+    private int GetExitCount(Vector2Int pos, MazeCell[,] maze)
     {
-        float score = 0;
-        foreach (var p in players)
-        {
-            float dist = Vector2Int.Distance(pos, p.GridPos);
-            if (dist < 2) score -= 50f;
-            score += dist * 5f;
-        }
+        int count = 0;
 
-        int exits = 0;
-        MazeCell targetCell = mazeCells[pos.x, pos.y];
-        if (targetCell.IsNorthOpen) exits++;
-        if (targetCell.IsSouthOpen) exits++;
-        if (targetCell.IsEastOpen) exits++;
-        if (targetCell.IsWestOpen) exits++;
+        MazeCell cell = maze[pos.x, pos.y];
 
-        if (exits <= 1) score -= 30f;
-        score += exits * 3f;
+        if (cell.IsNorthOpen) count++;
+        if (cell.IsSouthOpen) count++;
+        if (cell.IsEastOpen) count++;
+        if (cell.IsWestOpen) count++;
 
-        return score;
+        return count;
     }
 }

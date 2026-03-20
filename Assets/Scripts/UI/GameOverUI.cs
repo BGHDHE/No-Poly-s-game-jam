@@ -1,10 +1,20 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class GameOverUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI levelAchievedText;
+    [SerializeField] private Button mainMenuButton;
 
+
+
+    void Awake()
+    {
+        mainMenuButton.onClick.AddListener(() => {
+            Loader.Load(Loader.Scene.MainMenuScene);
+        });
+    }
 
     private void Start() {
         GameDirector.Instance.OnStateChanged += GameDirector_OnStateChanged;
@@ -12,12 +22,17 @@ public class GameOverUI : MonoBehaviour
         Hide();
     }
 
-    private void GameDirector_OnStateChanged(object sender, System.EventArgs e) {
-        if (GameDirector.Instance.IsGameOver()) {
+    private void GameDirector_OnStateChanged(object sender, System.EventArgs e) 
+    {
+        if (GameDirector.Instance.IsGameOver()) 
+        {
             Show();
-
-            levelAchievedText.text = "Nincsenek még szintek, így nem tudom kiírni a teljesített színtek számát.";
-        } else {
+        
+            int levels = GameDirector.Instance.GetLevelsCompleted();
+            levelAchievedText.text = levels.ToString();
+        } 
+        else 
+        {
             Hide();
         }
     }

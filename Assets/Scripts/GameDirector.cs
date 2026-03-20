@@ -19,8 +19,23 @@ public class GameDirector : MonoBehaviour
     private State state;
     private float countdownToStartTimer = 3f;
     private float gamePlayingTimer;
-    private float gamePlayingTimerMax = 30f;
+    private float gamePlayingTimerMax = 120f;
     private bool isGamePaused = false;
+
+    private int levelsCompleted = 0;
+    public int GetLevelsCompleted() => levelsCompleted;
+
+    public void IncrementLevel() 
+    {
+        levelsCompleted++;
+    }
+    public void ResetGameTimers() 
+    {
+        countdownToStartTimer = 3f;
+        gamePlayingTimer = gamePlayingTimerMax;
+        state = State.CountdownToStart;
+        OnStateChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     private void Awake() {
         Instance = this;
